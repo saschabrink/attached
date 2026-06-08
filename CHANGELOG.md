@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1] - 2026-06-08
+
+### Fixed
+
+- `.formatter.exs` was missing from the published Hex package, preventing
+  `import_deps: [:attached]` from working for consumers.
+
 ## [0.1.0] - 2026-04-24
 
 Initial release.
