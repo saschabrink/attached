@@ -4,7 +4,7 @@ defmodule Attached.Processors.MetadataExtractors.Image.VixTest do
   alias Attached.Processors.MetadataExtractors.Image.Vix
 
   @fixture_png Path.expand("../../../../support/fixtures/header.png", __DIR__)
-  @available Code.ensure_loaded?(Vix.Vips.Image)
+  @available Code.ensure_loaded?(Vix)
 
   describe "accept?/1" do
     test "returns true for image content types" do

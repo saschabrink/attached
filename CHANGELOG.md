@@ -13,6 +13,8 @@
   `File.exists?/1`, avoiding a noisy `identify` stderr error in tests.
 - ImageMagick metadata tests use a JPEG fixture with an embedded EXIF orientation
   tag, eliminating the `unknown image property` stderr warning.
+- `VixTest` now uses `Code.ensure_loaded?(Vix)` instead of `Code.ensure_loaded?(Vix.Vips.Image)`
+  to avoid NIF load failure at compile time causing tests to be incorrectly skipped.
 
 ## [0.1.1] - 2026-06-08
 
