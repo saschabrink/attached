@@ -22,6 +22,14 @@ defmodule Attached.Processors.MetadataExtractors.Image.ImageMagick do
 
   @impl true
   def metadata(input_path) do
+    if not File.exists?(input_path) do
+      %{}
+    else
+      metadata_from_file(input_path)
+    end
+  end
+
+  defp metadata_from_file(input_path) do
     try do
       case System.cmd("identify", ["-format", "%w %h %[EXIF:Orientation]", input_path]) do
         {output, 0} ->

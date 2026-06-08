@@ -3,7 +3,7 @@ defmodule Attached.Processors.MetadataExtractors.Image.ImageMagickTest do
 
   alias Attached.Processors.MetadataExtractors.Image.ImageMagick
 
-  @fixture_png Path.expand("../../../../support/fixtures/header.png", __DIR__)
+  @fixture_with_exif Path.expand("../../../../support/fixtures/header_with_exif.jpg", __DIR__)
   @available not is_nil(System.find_executable("identify"))
 
   describe "accept?/1" do
@@ -22,27 +22,21 @@ defmodule Attached.Processors.MetadataExtractors.Image.ImageMagickTest do
   end
 
   describe "metadata/1" do
-    import ExUnit.CaptureIO
-
     @tag skip: not @available
-    test "extracts width and height from a PNG" do
-      {meta, _} = with_io(:stderr, fn -> ImageMagick.metadata(@fixture_png) end)
-      assert meta[:width] == 1
-      assert meta[:height] == 1
+    test "extracts width and height from a JPEG with EXIF" do
+      assert ImageMagick.metadata(@fixture_with_exif) == %{width: 1, height: 1}
     end
 
     @tag skip: not @available
     test "returns a map with integer dimensions" do
-      {meta, _} = with_io(:stderr, fn -> ImageMagick.metadata(@fixture_png) end)
+      meta = ImageMagick.metadata(@fixture_with_exif)
       assert is_integer(meta[:width])
       assert is_integer(meta[:height])
     end
 
     @tag skip: not @available
-    test "returns empty map for unreadable path" do
-      import ExUnit.CaptureIO
-      {meta, _stderr} = with_io(:stderr, fn -> ImageMagick.metadata("/nonexistent/image.png") end)
-      assert meta == %{}
+    test "returns empty map for nonexistent path" do
+      assert ImageMagick.metadata("/nonexistent/image.png") == %{}
     end
   end
 end

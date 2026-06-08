@@ -9,6 +9,10 @@
 - Logger level set to `:warning` in test env, suppressing debug query output.
 - All DB-touching tests migrated from `ExUnit.Case` + manual sandbox checkout to
   `Attached.DataCase`, eliminating sandbox ownership races.
+- `ImageMagick.metadata/1` now returns `%{}` early for nonexistent paths via
+  `File.exists?/1`, avoiding a noisy `identify` stderr error in tests.
+- ImageMagick metadata tests use a JPEG fixture with an embedded EXIF orientation
+  tag, eliminating the `unknown image property` stderr warning.
 
 ## [0.1.1] - 2026-06-08
 
