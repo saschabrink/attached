@@ -1,18 +1,15 @@
 defmodule Attached.Web.PlugTest do
-  use ExUnit.Case, async: false
+  use Attached.DataCase, async: false
   use Oban.Testing, repo: Attached.TestRepo
 
   import Plug.Test
 
-  alias Attached.TestRepo, as: Repo
   alias Attached.Test.User
 
   @secret "plug-test-secret-long-enough-for-hmac"
   @opts Attached.Web.Plug.init([])
 
   setup do
-    :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
-
     tmp_path = Path.join(System.tmp_dir!(), "plug_test_#{System.unique_integer([:positive])}.txt")
     File.write!(tmp_path, "hello plug")
     on_exit(fn -> File.rm(tmp_path) end)

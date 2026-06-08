@@ -1,16 +1,10 @@
 defmodule Attached.OriginalsTest do
-  use ExUnit.Case, async: true
+  use Attached.DataCase, async: false
   use Oban.Testing, repo: Attached.TestRepo
 
-  alias Attached.TestRepo, as: Repo
   alias Attached.Originals
 
   @opts [owner_table: "users", owner_field: "avatar_attached_original_id"]
-
-  setup do
-    :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
-    :ok
-  end
 
   describe "create_from_upload!/2" do
     test "ingests a duck-typed upload map" do

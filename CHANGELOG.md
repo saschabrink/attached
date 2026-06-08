@@ -7,6 +7,8 @@
 - `path_for/1` now has an explicit `nil` clause, resolving an Elixir 1.20 type
   warning when tests pass `nil` to verify the security guard.
 - Logger level set to `:warning` in test env, suppressing debug query output.
+- All DB-touching tests migrated from `ExUnit.Case` + manual sandbox checkout to
+  `Attached.DataCase`, eliminating sandbox ownership races.
 
 ## [0.1.1] - 2026-06-08
 

@@ -1,13 +1,10 @@
 defmodule AttachedTest do
-  use ExUnit.Case, async: true
+  use Attached.DataCase, async: false
   use Oban.Testing, repo: Attached.TestRepo
 
-  alias Attached.TestRepo, as: Repo
   alias Attached.Test.User
 
   setup do
-    :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
-
     tmp_path =
       Path.join(System.tmp_dir!(), "attached_test_#{System.unique_integer([:positive])}.txt")
 

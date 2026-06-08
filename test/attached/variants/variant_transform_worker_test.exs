@@ -1,18 +1,13 @@
 defmodule Attached.Variants.VariantTransformWorkerTest do
-  use ExUnit.Case, async: false
+  use Attached.DataCase, async: false
   use Oban.Testing, repo: Attached.TestRepo
 
-  alias Attached.TestRepo, as: Repo
   alias Attached.Variants
   alias Attached.Variants.Variant
 
   @ffmpeg_available not is_nil(System.find_executable("ffmpeg"))
   @image_tool_available not is_nil(System.find_executable("identify")) or
                           Code.ensure_loaded?(Vix.Vips.Image)
-
-  setup do
-    :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
-  end
 
   defp insert_original(attrs) do
     Attached.Originals.Original.changeset(attrs) |> Repo.insert!()

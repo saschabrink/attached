@@ -1,16 +1,8 @@
 defmodule Attached.Ecto.CRUDTest do
-  use ExUnit.Case, async: true
-
-  import Ecto.Query
+  use Attached.DataCase, async: false
 
   alias Attached.Originals.Original
   alias Attached.Ecto.CRUD
-  alias Attached.TestRepo, as: Repo
-
-  setup do
-    :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
-    :ok
-  end
 
   describe "list/2" do
     test "returns all rows by default" do

@@ -1,13 +1,10 @@
 defmodule Attached.StorageBackends.DiskTest do
-  use ExUnit.Case, async: true
+  use Attached.DataCase, async: false
   use Oban.Testing, repo: Attached.TestRepo
 
-  alias Attached.TestRepo, as: Repo
   alias Attached.Test.User
 
   setup do
-    :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
-
     tmp_path = Path.join(System.tmp_dir!(), "disk_test_#{System.unique_integer([:positive])}.txt")
     File.write!(tmp_path, "hello world")
     on_exit(fn -> File.rm(tmp_path) end)

@@ -1,11 +1,5 @@
 defmodule Attached.VariantsTest do
-  use ExUnit.Case, async: false
-
-  alias Attached.TestRepo, as: Repo
-
-  setup do
-    :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
-  end
+  use Attached.DataCase, async: false
 
   defp insert_original(attrs) do
     Attached.Originals.Original.changeset(attrs) |> Repo.insert!()

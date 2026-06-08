@@ -1,16 +1,10 @@
 defmodule Attached.Originals.ExtractMetadataWorkerTest do
-  use ExUnit.Case, async: false
+  use Attached.DataCase, async: false
   use Oban.Testing, repo: Attached.TestRepo
-
-  alias Attached.TestRepo, as: Repo
 
   @fixture_png Path.expand("../../support/fixtures/header.png", __DIR__)
   @analysis_available Code.ensure_loaded?(Vix.Vips.Image) or
                         not is_nil(System.find_executable("identify"))
-
-  setup do
-    :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
-  end
 
   defp insert_original(attrs) do
     Attached.Originals.Original.changeset(attrs) |> Repo.insert!()
