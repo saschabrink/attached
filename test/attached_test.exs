@@ -391,7 +391,13 @@ defmodule AttachedTest do
 
     test "list_orphans/4 returns [] for invalid owner_field" do
       insert_original!(owner_field: "nonexistent_column")
-      assert Attached.Originals.list_orphans("users", "nonexistent_column") == []
+
+      log =
+        capture_log(fn ->
+          assert Attached.Originals.list_orphans("users", "nonexistent_column") == []
+        end)
+
+      assert log =~ "Skipping orphan group"
     end
   end
 

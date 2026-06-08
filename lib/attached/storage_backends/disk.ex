@@ -90,6 +90,8 @@ defmodule Attached.StorageBackends.Disk do
   end
 
   @doc "Returns the absolute filesystem path for a given key."
+  def path_for(nil), do: raise(ArgumentError, "key is blank")
+
   def path_for(key) do
     validate_key!(key)
     {folder, filename} = layout_for(key)

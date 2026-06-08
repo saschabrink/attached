@@ -22,23 +22,26 @@ defmodule Attached.Processors.MetadataExtractors.Image.ImageMagickTest do
   end
 
   describe "metadata/1" do
+    import ExUnit.CaptureIO
+
     @tag skip: not @available
     test "extracts width and height from a PNG" do
-      meta = ImageMagick.metadata(@fixture_png)
+      {meta, _} = with_io(:stderr, fn -> ImageMagick.metadata(@fixture_png) end)
       assert meta[:width] == 1
       assert meta[:height] == 1
     end
 
     @tag skip: not @available
     test "returns a map with integer dimensions" do
-      meta = ImageMagick.metadata(@fixture_png)
+      {meta, _} = with_io(:stderr, fn -> ImageMagick.metadata(@fixture_png) end)
       assert is_integer(meta[:width])
       assert is_integer(meta[:height])
     end
 
     @tag skip: not @available
     test "returns empty map for unreadable path" do
-      meta = ImageMagick.metadata("/nonexistent/image.png")
+      import ExUnit.CaptureIO
+      {meta, _stderr} = with_io(:stderr, fn -> ImageMagick.metadata("/nonexistent/image.png") end)
       assert meta == %{}
     end
   end

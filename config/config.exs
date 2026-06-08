@@ -1,12 +1,14 @@
 import Config
 
 if config_env() == :test do
+  config :logger, level: :warning
+
   config :attached,
     repo: Attached.TestRepo,
     storage_backend: Attached.StorageBackends.Disk,
     disk: [
       root: Path.join([System.tmp_dir!(), "attached_test_storage"]),
-      base_url: "/storage"
+      base_url: "/attachments"
     ]
 
   config :attached, Attached.TestRepo,

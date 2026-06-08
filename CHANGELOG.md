@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- `path_for/1` now has an explicit `nil` clause, resolving an Elixir 1.20 type
+  warning when tests pass `nil` to verify the security guard.
+- Logger level set to `:warning` in test env, suppressing debug query output.
+
 ## [0.1.1] - 2026-06-08
 
 ### Fixed
