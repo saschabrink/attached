@@ -200,6 +200,37 @@ defmodule Attached.StorageBackends.S3Test do
     end
   end
 
+  describe "direct_upload_url/2" do
+    test "presigns a PUT with the metadata headers signed" do
+      checksum = Base.encode64(:crypto.hash(:md5, "body"))
+
+      assert {:ok, %{url: url, headers: headers}} =
+               S3.direct_upload_url("abc123def",
+                 content_type: "image/png",
+                 checksum: checksum,
+                 byte_size: 4
+               )
+
+      assert {"content-type", "image/png"} in headers
+      assert {"content-md5", checksum} in headers
+      assert {"content-length", "4"} in headers
+
+      assert url =~ "https://test-bucket.s3.eu-central-1.amazonaws.com/abc123def?"
+      # Signed header set is sorted and includes the metadata headers ("%3B" = ";").
+      assert url =~ "X-Amz-SignedHeaders=content-length%3Bcontent-md5%3Bcontent-type%3Bhost"
+      assert url =~ "X-Amz-Signature="
+    end
+
+    test "omits headers for options not given" do
+      assert {:ok, %{url: url, headers: []}} = S3.direct_upload_url("abc123def")
+      assert url =~ "X-Amz-SignedHeaders=host"
+    end
+
+    test "is exposed through the facade" do
+      assert {:ok, %{url: _, headers: _}} = Attached.StorageBackends.direct_upload_url("abc123def")
+    end
+  end
+
   describe "XML helper" do
     alias Attached.StorageBackends.S3.XML
 

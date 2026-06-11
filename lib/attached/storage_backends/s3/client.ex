@@ -24,8 +24,8 @@ defmodule Attached.StorageBackends.S3.Client do
     |> Req.request()
   end
 
-  def presigned_url(url, method, expires_in) do
-    Signature.presign_url(credentials(), :calendar.universal_time(), method_string(method), url, expires_in)
+  def presigned_url(url, method, expires_in, headers \\ []) do
+    Signature.presign_url(credentials(), :calendar.universal_time(), method_string(method), url, expires_in, headers)
   end
 
   defp credentials do

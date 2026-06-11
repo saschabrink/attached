@@ -24,4 +24,21 @@ defmodule Attached.StorageBackends do
   def delete_prefixed(prefix), do: current().delete_prefixed(prefix)
   def exists?(key), do: current().exists?(key)
   def url(key, opts \\ []), do: current().url(key, opts)
+
+  @doc """
+  Returns `{:ok, %{url: url, headers: headers}}` for a direct browser upload
+  (HTTP PUT) of `key`, or `{:error, :not_supported}` when the configured
+  backend doesn't implement the optional `direct_upload_url/2` callback.
+
+  See `Attached.StorageBackends.Behaviour` for the supported options.
+  """
+  def direct_upload_url(key, opts \\ []) do
+    backend = current()
+
+    if Code.ensure_loaded?(backend) and function_exported?(backend, :direct_upload_url, 2) do
+      backend.direct_upload_url(key, opts)
+    else
+      {:error, :not_supported}
+    end
+  end
 end

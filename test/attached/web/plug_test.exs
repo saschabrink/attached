@@ -104,4 +104,74 @@ defmodule Attached.Web.PlugTest do
       assert conn.status == 404
     end
   end
+
+  describe "PUT /originals/:token (direct upload)" do
+    defp direct_upload_path(key, opts \\ []) do
+      {:ok, %{url: url}} = Attached.StorageBackends.Disk.direct_upload_url(key, opts)
+      String.replace_prefix(url, "/attachments", "")
+    end
+
+    defp put_upload(path, body, headers \\ []) do
+      Enum.reduce(headers, conn(:put, path, body), fn {name, value}, conn ->
+        Plug.Conn.put_req_header(conn, name, value)
+      end)
+      |> Attached.Web.Plug.call(@opts)
+    end
+
+    test "stores the body under the key and returns 204" do
+      key = "direct-#{System.unique_integer([:positive])}"
+      conn = put_upload(direct_upload_path(key), "uploaded bytes")
+
+      assert conn.status == 204
+      assert {:ok, "uploaded bytes"} = Attached.StorageBackends.download(key)
+    end
+
+    test "verifies Content-MD5 when sent" do
+      key = "direct-#{System.unique_integer([:positive])}"
+      body = "checked bytes"
+      checksum = Base.encode64(:crypto.hash(:md5, body))
+
+      conn = put_upload(direct_upload_path(key), body, [{"content-md5", checksum}])
+      assert conn.status == 204
+
+      key2 = "direct-#{System.unique_integer([:positive])}"
+      conn = put_upload(direct_upload_path(key2), "tampered bytes", [{"content-md5", checksum}])
+      assert conn.status == 400
+      refute Attached.StorageBackends.exists?(key2)
+    end
+
+    test "rejects bodies above max_upload_size" do
+      key = "direct-#{System.unique_integer([:positive])}"
+      opts = Attached.Web.Plug.init(max_upload_size: 5)
+
+      conn =
+        conn(:put, direct_upload_path(key), "more than five bytes")
+        |> Attached.Web.Plug.call(opts)
+
+      assert conn.status == 413
+      refute Attached.StorageBackends.exists?(key)
+    end
+
+    test "with a secret, rejects GET-purpose tokens for PUT and vice versa" do
+      Application.put_env(:attached, :secret_key_base, @secret)
+      on_exit(fn -> Application.delete_env(:attached, :secret_key_base) end)
+
+      key = "direct-#{System.unique_integer([:positive])}"
+
+      # Download token replayed as upload → 403.
+      get_token = Attached.Web.Signer.sign(key)
+      conn = put_upload("/originals/#{get_token}", "overwrite attempt")
+      assert conn.status == 403
+
+      # Upload token used for download → 403.
+      {:ok, %{url: url}} = Attached.StorageBackends.Disk.direct_upload_url(key)
+      conn = get(String.replace_prefix(url, "/attachments", ""))
+      assert conn.status == 403
+
+      # The real upload token works for PUT.
+      conn = put_upload(String.replace_prefix(url, "/attachments", ""), "legit body")
+      assert conn.status == 204
+      assert {:ok, "legit body"} = Attached.StorageBackends.download(key)
+    end
+  end
 end

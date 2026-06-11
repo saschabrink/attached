@@ -33,4 +33,20 @@ defmodule Attached.StorageBackends.Behaviour do
 
   @doc "Return a URL for the file at `key`."
   @callback url(key, opts :: keyword()) :: String.t()
+
+  @doc """
+  Return a URL (plus the headers the client must send) for uploading the file
+  at `key` directly from the browser via HTTP PUT.
+
+  Options: `:content_type`, `:checksum` (base64 MD5, pinned via
+  `Content-MD5`), `:byte_size` (pinned via `Content-Length`), `:expires_in`.
+
+  Optional — backends that cannot offer direct uploads simply don't implement
+  it; `Attached.StorageBackends.direct_upload_url/2` then returns
+  `{:error, :not_supported}`.
+  """
+  @callback direct_upload_url(key, opts :: keyword()) ::
+              {:ok, %{url: String.t(), headers: [{String.t(), String.t()}]}} | {:error, term()}
+
+  @optional_callbacks direct_upload_url: 2
 end

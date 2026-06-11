@@ -332,10 +332,14 @@ defmodule Attached.Originals do
   Useful when you want to clean up a single group rather than all orphans at once:
 
       Attached.Originals.purge_by_owner_group("users", "avatar_attached_original_id")
+
+  Respects the `:orphan_grace_period` config (default 48 hours) like
+  `Attached.Originals.PurgeOrphansWorker` — fresh orphans (e.g. direct
+  uploads still in flight) are left alone.
   """
   def purge_by_owner_group(owner_table, owner_field)
       when is_binary(owner_table) and is_binary(owner_field) do
-    list(query: &Scopes.orphans(&1, owner_table, owner_field))
+    list(query: &Scopes.purgeable(&1, owner_table, owner_field))
     |> Enum.each(&purge_later/1)
   end
 

@@ -39,7 +39,10 @@ end
 - [x] Orphan cleanup
 - [x] S3 storage (built-in, optional `req` dep)
 - [ ] Mirror service (multi-backend writes)
-- [ ] Direct upload (browser → cloud)
+- [ ] Direct upload (browser → cloud) — storage layer done: presigned PUT URLs
+  (`Attached.StorageBackends.direct_upload_url/2`, S3 + Disk), purpose-bound
+  upload tokens, orphan grace period. Missing: pending-original creation,
+  signed attach tokens, LiveView `external:` upload helpers.
 
 ## Setup
 

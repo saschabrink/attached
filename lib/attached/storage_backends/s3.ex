@@ -144,7 +144,27 @@ defmodule Attached.StorageBackends.S3 do
     |> Client.presigned_url(:get, expires_in)
   end
 
+  @impl true
+  def direct_upload_url(key, opts \\ []) do
+    expires_in = opts[:expires_in] || Config.get(:url_expires_in, 300)
+    headers = direct_upload_headers(opts)
+
+    {:ok, %{url: Client.presigned_url(object_url(key), :put, expires_in, headers), headers: headers}}
+  end
+
   # ===== Private =====
+
+  # These headers are baked into the presigned PUT signature, so the client
+  # must send them verbatim — S3 then enforces the declared content type,
+  # checksum (Content-MD5 is verified against the body), and size.
+  defp direct_upload_headers(opts) do
+    [
+      {"content-type", opts[:content_type]},
+      {"content-md5", opts[:checksum]},
+      {"content-length", opts[:byte_size] && Integer.to_string(opts[:byte_size])}
+    ]
+    |> Enum.reject(fn {_name, value} -> is_nil(value) end)
+  end
 
   defp put_object(key, body) do
     case Client.request(:put, object_url(key), body: body) do

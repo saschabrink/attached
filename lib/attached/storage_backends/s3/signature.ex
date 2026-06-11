@@ -61,10 +61,20 @@ defmodule Attached.StorageBackends.S3.Signature do
   `X-Amz-Credential`, ..., `X-Amz-Signature`) appended — a presigned URL,
   valid for `expires_in` seconds. Query params already present on `url`
   (e.g. `response-content-type`) are preserved and covered by the signature.
+
+  `headers` are included in the signature on top of `host` — the client must
+  then send them verbatim, which is how presigned PUT uploads pin
+  `content-md5`, `content-type`, and `content-length` server-side. The
+  payload itself stays unsigned (`UNSIGNED-PAYLOAD`) since the body is
+  unknown at signing time.
   """
-  @spec presign_url(credentials, :calendar.datetime(), String.t(), String.t(), pos_integer()) :: String.t()
-  def presign_url(creds, datetime, method, url, expires_in) do
+  @spec presign_url(credentials, :calendar.datetime(), String.t(), String.t(), pos_integer(), [{String.t(), String.t()}]) ::
+          String.t()
+  def presign_url(creds, datetime, method, url, expires_in, headers \\ []) do
     uri = URI.parse(url)
+
+    canonical_headers = canonicalize_headers([{"host", host(uri)} | headers])
+    signed_names = Enum.map_join(canonical_headers, ";", fn {name, _} -> name end)
 
     auth_params =
       [
@@ -72,15 +82,13 @@ defmodule Attached.StorageBackends.S3.Signature do
         {"X-Amz-Credential", "#{creds.access_key_id}/#{scope(creds, datetime)}"},
         {"X-Amz-Date", amz_datetime(datetime)},
         {"X-Amz-Expires", Integer.to_string(expires_in)},
-        {"X-Amz-SignedHeaders", "host"}
+        {"X-Amz-SignedHeaders", signed_names}
       ] ++ session_token_params(creds)
 
     query = query_pairs(uri) ++ auth_params
 
-    # Presigned URLs sign only the host header and an unsigned payload —
-    # the body is unknown at signing time.
     signature =
-      [method, canonical_path(uri), canonical_query(query), "host:#{host(uri)}\n", "host", @unsigned_payload]
+      [method, canonical_path(uri), canonical_query(query), header_block(canonical_headers), signed_names, @unsigned_payload]
       |> Enum.join("\n")
       |> sign(creds, datetime)
 

@@ -44,4 +44,32 @@ defmodule Attached.Originals.Scopes do
       )
     )
   end
+
+  @doc """
+  Restricts a query to originals that are safe to purge: orphaned within the
+  given `(owner_table, owner_field)` group and past the configured grace
+  period.
+
+  The grace period (`config :attached, :orphan_grace_period`, in seconds,
+  default 48 hours, `0` disables it) protects originals created ahead of
+  their attachment — e.g. a direct upload whose form hasn't been submitted
+  yet — from being swept while still in flight.
+
+  This is the scope behind `Attached.Originals.PurgeOrphansWorker` and
+  `Attached.Originals.purge_by_owner_group/2`. Use `orphans/3` directly for
+  reporting, where fresh orphans should be visible.
+  """
+  def purgeable(query, owner_table, owner_field)
+      when is_binary(owner_table) and is_binary(owner_field) do
+    query
+    |> orphans(owner_table, owner_field)
+    |> past_grace_period(Application.get_env(:attached, :orphan_grace_period, 172_800))
+  end
+
+  defp past_grace_period(query, 0), do: query
+
+  defp past_grace_period(query, seconds) when is_integer(seconds) and seconds > 0 do
+    cutoff = DateTime.utc_now() |> DateTime.add(-seconds, :second) |> DateTime.truncate(:second)
+    where(query, [b], b.inserted_at < ^cutoff)
+  end
 end

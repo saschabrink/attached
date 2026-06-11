@@ -89,6 +89,22 @@ defmodule Attached.StorageBackends.Disk do
     "#{base_url}/originals/#{key}"
   end
 
+  @impl true
+  def direct_upload_url(key, opts \\ []) do
+    # Purpose-bound token: a "direct_upload" token is rejected by the GET
+    # route and a leaked download token cannot be replayed as a PUT.
+    token = Attached.Web.Signer.sign(key, purpose: "direct_upload", expires_in: opts[:expires_in])
+
+    headers =
+      [
+        {"content-type", opts[:content_type]},
+        {"content-md5", opts[:checksum]}
+      ]
+      |> Enum.reject(fn {_name, value} -> is_nil(value) end)
+
+    {:ok, %{url: "#{config(:base_url, "/attachments")}/originals/#{token}", headers: headers}}
+  end
+
   @doc "Returns the absolute filesystem path for a given key."
   def path_for(nil), do: raise(ArgumentError, "key is blank")
 

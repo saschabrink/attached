@@ -13,6 +13,16 @@ defmodule Attached.Originals.PurgeOrphansWorker do
   and are cleaned up via the `original_id` FK (`on_delete: :delete_all`)
   when their parent original is purged.
 
+  ## Grace period
+
+  Only orphans older than the configured grace period are purged, so
+  originals created ahead of their attachment (e.g. direct uploads whose
+  form hasn't been submitted yet) survive the sweep while in flight:
+
+      config :attached, orphan_grace_period: 172_800  # seconds (48 hours), the default
+
+  Set `0` to purge orphans regardless of age.
+
   Schedule as a cron job:
 
       config :my_app, Oban,
@@ -31,7 +41,7 @@ defmodule Attached.Originals.PurgeOrphansWorker do
   @impl true
   def perform(%Oban.Job{}) do
     Enum.each(Originals.list_owner_groups(), fn %{owner_table: owner_table, owner_field: owner_field} ->
-      Originals.list(query: &Scopes.orphans(&1, owner_table, owner_field))
+      Originals.list(query: &Scopes.purgeable(&1, owner_table, owner_field))
       |> Enum.each(&Originals.purge!/1)
     end)
 

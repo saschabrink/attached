@@ -17,6 +17,22 @@
   full backend — including acceptance of our presigned URLs by a real S3
   implementation. Runs as part of `mix test` whenever the `garage` binary is
   available (the dev shell provides it), excluded otherwise.
+- Direct-upload groundwork: `Attached.StorageBackends.direct_upload_url/2`
+  returns a URL (plus required headers) for uploading a key straight from the
+  browser via HTTP PUT. S3 presigns the PUT with `content-md5`,
+  `content-type`, and `content-length` pinned in the signature; Disk serves a
+  purpose-bound token handled by a new `PUT /originals/:token` route in
+  `Attached.Web.Plug` (with optional `:max_upload_size` and Content-MD5
+  verification). `Attached.Web.Signer` tokens now carry a purpose, so
+  download URLs can never be replayed as uploads.
+
+### Changed
+
+- Orphan purging (`PurgeOrphansWorker`, `purge_by_owner_group/2`) now skips
+  orphans younger than `config :attached, :orphan_grace_period` (default 48
+  hours, `0` disables), so originals created ahead of their attachment —
+  e.g. direct uploads in flight — survive the sweep. `list_orphans/...` and
+  `count_orphans/...` still report all current orphans regardless of age.
 
 ### Fixed
 

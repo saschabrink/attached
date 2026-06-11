@@ -67,6 +67,34 @@ defmodule Attached.Web.SignerTest do
     end
   end
 
+  describe "purposes" do
+    test "a token round-trips with a matching purpose" do
+      token = Attached.Web.Signer.sign("abc123", purpose: "direct_upload")
+      assert {:ok, "abc123"} = Attached.Web.Signer.verify(token, purpose: "direct_upload")
+    end
+
+    test "a token is rejected for a different purpose" do
+      token = Attached.Web.Signer.sign("abc123", purpose: "direct_upload")
+      assert {:error, _} = Attached.Web.Signer.verify(token)
+      assert {:error, _} = Attached.Web.Signer.verify(token, purpose: "other")
+    end
+
+    test "a default (get) token is rejected for the direct_upload purpose" do
+      token = Attached.Web.Signer.sign("abc123")
+      assert {:error, _} = Attached.Web.Signer.verify(token, purpose: "direct_upload")
+    end
+
+    test "a legacy two-field payload verifies as the default purpose" do
+      expiry = System.system_time(:second) + 100
+      payload = "abc123|#{expiry}"
+      mac = :crypto.mac(:hmac, :sha256, @secret, payload) |> Base.url_encode64(padding: false)
+      token = Base.url_encode64(payload, padding: false) <> "." <> mac
+
+      assert {:ok, "abc123"} = Attached.Web.Signer.verify(token)
+      assert {:error, _} = Attached.Web.Signer.verify(token, purpose: "direct_upload")
+    end
+  end
+
   describe "without secret_key_base configured" do
     setup do
       Application.delete_env(:attached, :secret_key_base)

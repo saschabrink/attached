@@ -116,6 +116,43 @@ defmodule Attached.StorageBackends.S3.SignatureTest do
     end
   end
 
+  describe "presign_url/6 with extra signed headers" do
+    test "lists the headers in X-Amz-SignedHeaders, sorted" do
+      url =
+        Signature.presign_url(
+          @creds,
+          @datetime,
+          "PUT",
+          "https://examplebucket.s3.amazonaws.com/test.txt",
+          300,
+          [{"content-md5", "abc"}, {"content-type", "text/plain"}]
+        )
+
+      assert url =~ "X-Amz-SignedHeaders=content-md5%3Bcontent-type%3Bhost"
+    end
+
+    test "the signature covers the header values" do
+      presign = fn md5 ->
+        Signature.presign_url(
+          @creds,
+          @datetime,
+          "PUT",
+          "https://examplebucket.s3.amazonaws.com/test.txt",
+          300,
+          [{"content-md5", md5}]
+        )
+      end
+
+      [sig_a, sig_b] =
+        for url <- [presign.("aaa"), presign.("bbb")] do
+          [sig] = Regex.run(~r/X-Amz-Signature=([0-9a-f]+)/, url, capture: :all_but_first)
+          sig
+        end
+
+      refute sig_a == sig_b
+    end
+  end
+
   describe "non-vector properties" do
     test "non-default ports are part of the signed host" do
       url = Signature.presign_url(@creds, @datetime, "GET", "http://localhost:9000/bucket/key", 300)

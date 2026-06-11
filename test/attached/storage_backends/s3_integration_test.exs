@@ -162,6 +162,29 @@ defmodule Attached.StorageBackends.S3IntegrationTest do
     assert response.headers["content-type"] == ["text/plain"]
   end
 
+  test "direct upload: presigned PUT with signed metadata headers" do
+    body = "direct upload body"
+    checksum = Base.encode64(:crypto.hash(:md5, body))
+
+    assert {:ok, %{url: url, headers: headers}} =
+             S3.direct_upload_url("it/direct",
+               content_type: "text/plain",
+               checksum: checksum,
+               byte_size: byte_size(body)
+             )
+
+    assert {:ok, %{status: status}} = Req.put(url, headers: headers, body: body, retry: false)
+    assert status in 200..299
+    assert {:ok, ^body} = S3.download("it/direct")
+
+    # A body that doesn't match the signed Content-MD5 must be rejected.
+    assert {:ok, %{status: tampered_status}} =
+             Req.put(url, headers: headers, body: "tampered body!!!!!", retry: false)
+
+    assert tampered_status in [400, 403]
+    assert {:ok, ^body} = S3.download("it/direct")
+  end
+
   test "compose concatenates objects" do
     assert :ok = S3.upload("it/compose-a", tmp_file!("AAA"))
     assert :ok = S3.upload("it/compose-b", tmp_file!("BBB"))
