@@ -38,7 +38,9 @@ defmodule Attached do
       Attached.url(user, :avatar)
       Attached.url(user, :avatar, :thumb)
 
-  Returns `nil` if no file is attached.
+  Returns `nil` if no file is attached. Raises `ArgumentError` if `field` is
+  not a declared `attached` field — a typo'd field name is a programming
+  error, not an empty attachment.
 
   When called with a variant name, `:variants` must be preloaded on the
   original — either via `Attached.with_attached/2` (recommended) or
@@ -89,18 +91,13 @@ defmodule Attached do
 
   @doc """
   Returns `true` if the record has a file attached for the given field.
+
+  Raises `ArgumentError` if `field` is not a declared `attached` field.
   """
   def attached?(record, field) do
-    schema = record.__struct__
-
-    case schema.__attached_config__(field) do
-      {_, opts} ->
-        fk = Keyword.fetch!(opts, :foreign_key)
-        not is_nil(Map.get(record, fk))
-
-      nil ->
-        false
-    end
+    {_, opts} = config_for!(record.__struct__, field)
+    fk = Keyword.fetch!(opts, :foreign_key)
+    not is_nil(Map.get(record, fk))
   end
 
   @doc """
@@ -119,6 +116,8 @@ defmodule Attached do
   @doc """
   Synchronously deletes the attachment: removes the original record,
   variant records, variant files, and all files from storage.
+
+  Raises `ArgumentError` if `field` is not a declared `attached` field.
   """
   def purge(record, field) do
     case get_original(record, field) do
@@ -139,6 +138,8 @@ defmodule Attached do
 
   @doc """
   Enqueues an Oban job to purge the attachment asynchronously.
+
+  Raises `ArgumentError` if `field` is not a declared `attached` field.
   """
   def purge_later(record, field) do
     case get_original(record, field) do
@@ -187,11 +188,27 @@ defmodule Attached do
   # Internals
   # -------------------------------------------------------------------
 
-  defp get_original(record, field), do: Map.get(record, :"#{field}_attached_original")
+  defp get_original(record, field) do
+    config_for!(record.__struct__, field)
+    Map.get(record, :"#{field}_attached_original")
+  end
 
   defp one_fk(schema, field) do
-    {_, opts} = schema.__attached_config__(field)
+    {_, opts} = config_for!(schema, field)
     Keyword.fetch!(opts, :foreign_key)
+  end
+
+  # A typo'd field would otherwise read as "nothing attached" (nil URL,
+  # no-op purge) — the kind of bug that hides in a template for an hour.
+  defp config_for!(schema, field) do
+    if function_exported?(schema, :__attached_config__, 1) do
+      schema.__attached_config__(field) ||
+        raise ArgumentError,
+              "#{inspect(schema)} does not have an attached field #{inspect(field)} — " <>
+                "declared: #{inspect(schema.__attached_fields__())}"
+    else
+      raise ArgumentError, "#{inspect(schema)} does not use Attached.Ecto.Schema"
+    end
   end
 
   defp signed_url(key) do

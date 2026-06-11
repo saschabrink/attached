@@ -160,6 +160,20 @@ defmodule AttachedTest do
 
       assert Attached.attached?(user, :avatar)
     end
+
+    test "raises for an unknown field" do
+      user = Repo.insert!(User.changeset(%User{}, %{name: "Test"}))
+
+      assert_raise ArgumentError, ~r/does not have an attached field :avatarr/, fn ->
+        Attached.attached?(user, :avatarr)
+      end
+    end
+
+    test "raises for a schema without attached fields" do
+      assert_raise ArgumentError, ~r/does not use Attached.Ecto.Schema/, fn ->
+        Attached.attached?(%URI{}, :avatar)
+      end
+    end
   end
 
   describe "url/2" do
@@ -179,6 +193,14 @@ defmodule AttachedTest do
         |> Repo.preload(avatar_attached_original: :variants)
 
       assert Attached.url(user, :avatar) == nil
+    end
+
+    test "raises for an unknown field instead of returning nil" do
+      user = Repo.insert!(User.changeset(%User{}, %{name: "Test"}))
+
+      assert_raise ArgumentError, ~r/does not have an attached field :avatarr/, fn ->
+        Attached.url(user, :avatarr)
+      end
     end
   end
 

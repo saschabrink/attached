@@ -13,6 +13,11 @@
 
 ### Changed
 
+- `Attached.url/2,3`, `Attached.attached?/2`, `Attached.purge/2`, and
+  `Attached.purge_later/2` now raise `ArgumentError` when called with a field
+  that is not declared via `attached` (previously: silent `nil`/`false`/no-op).
+  A typo'd field name is a programming error, not an empty attachment — the
+  error lists the declared fields.
 - `Attached.Web.Plug` no longer buffers files in memory: Disk-backed files
   are served via sendfile (`Plug.Conn.send_file/5`); backends without a
   local path serve ranges through `download_chunk/3` and only fall back to
