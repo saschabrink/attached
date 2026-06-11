@@ -13,6 +13,10 @@
   `delete_prefixed/1` with pagination, STS session tokens, and optional
   `response-content-type` on presigned URLs resolved from the original/variant
   row. Path-style addressing via the `:endpoint` option for S3-compatibles.
+- S3 integration suite that boots a local Garage server and exercises the
+  full backend — including acceptance of our presigned URLs by a real S3
+  implementation. Runs as part of `mix test` whenever the `garage` binary is
+  available (the dev shell provides it), excluded otherwise.
 
 ### Fixed
 

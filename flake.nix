@@ -17,6 +17,10 @@
             pkgs.mupdf
             pkgs.epub-thumbnailer
             pkgs.pandoc
+            # S3 integration tests (mix test --only integration). Garage instead
+            # of MinIO: nixpkgs marks minio as insecure (unpatched 2026 CVEs,
+            # community edition unmaintained).
+            pkgs.garage
           ];
 
           shellHook = ''

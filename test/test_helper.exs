@@ -16,5 +16,9 @@ configured_root =
 
 Attached.Test.setup_storage!(root: configured_root)
 
-ExUnit.start()
+# S3 integration tests boot a local Garage server. They run as part of the
+# normal suite whenever the binary is available (the dev shell provides it)
+# and are excluded otherwise.
+exclude = if System.find_executable("garage"), do: [], else: [:integration]
+ExUnit.start(exclude: exclude)
 Ecto.Adapters.SQL.Sandbox.mode(Attached.TestRepo, :manual)
