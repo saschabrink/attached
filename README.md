@@ -1,8 +1,77 @@
 # Attached
 
+[![Hex.pm](https://img.shields.io/hexpm/v/attached.svg)](https://hex.pm/packages/attached)
+[![Hexdocs](https://img.shields.io/badge/hex-docs-purple.svg)](https://hexdocs.pm/attached)
+
 File attachments for Ecto schemas. Inspired by Rails' Active Storage, designed for Ecto.
 
 Attached gives your Ecto schemas declarative file attachments with variant support, a pluggable storage backend, and cleanup tracking — without polymorphic associations.
+
+## Quick start
+
+```elixir
+# mix.exs
+{:attached, "~> 0.2"},
+{:vix, "~> 0.31"}  # recommended for variants — auto-installs libvips (alternative: system ImageMagick)
+```
+
+```bash
+mix attached.install && mix ecto.migrate    # creates the attached_* tables
+```
+
+```elixir
+# config/config.exs
+config :attached,
+  repo: MyApp.Repo,
+  storage_backends: [
+    local: {Attached.StorageBackends.Disk, root: Path.join(["priv", "attachments"])}
+  ]
+
+# router.ex — serves files from the Disk backend
+forward "/attachments", Attached.Web.Plug
+```
+
+```elixir
+defmodule MyApp.Accounts.User do
+  use Ecto.Schema
+  use Attached.Ecto.Schema
+  import Ecto.Changeset
+
+  schema "users" do
+    field :name, :string
+    attached :avatar, variants: %{thumb: [resize_to_fill: {100, 100}]}
+  end
+
+  def changeset(user, attrs) do
+    user
+    |> cast(attrs, [:name])
+    |> put_attached(:avatar, attrs["avatar"])
+  end
+end
+```
+
+```bash
+mix attached.gen.migration MyApp.Accounts.User avatar && mix ecto.migrate
+```
+
+```heex
+<img src={Attached.url(@user, :avatar, :thumb)} />
+```
+
+That's the whole integration — a `%Plug.Upload{}` (or LiveView upload) in the
+params flows through your regular `Repo.insert`/`Repo.update`. The rest of this
+README covers each step in detail.
+
+## See it in action
+
+- **Demo app** — [attached_phoenix_demo](https://github.com/saschabrink/attached_phoenix_demo)
+  is a small Phoenix LiveView app showcasing the library end to end: clone it,
+  run it, read the code.
+- **Dashboard** — [`attached_dashboard`](https://hex.pm/packages/attached_dashboard)
+  is a companion LiveView dashboard for inspecting originals, variants, owners,
+  configured processors, and orphans:
+
+[![attached_dashboard — overview page](https://raw.githubusercontent.com/saschabrink/attached/main/docs/screenshots/dashboard_overview.png)](https://github.com/saschabrink/attached_dashboard)
 
 ## Design principles
 
@@ -12,37 +81,8 @@ Attached gives your Ecto schemas declarative file attachments with variant suppo
 - **On-the-fly variants.** Define named variants on your schema. The first `url/3` call generates the transformation on demand and caches it. Only schema-defined variant names are accepted — no ad-hoc transforms.
 - **Cleanup-aware.** Each original tracks its `owner_table` and `owner_field` so orphaned files can be found and purged without scanning every table.
 
-## Installation
-
-```elixir
-def deps do
-  [
-    {:attached, "~> 0.1.0"},
-    {:vix, "~> 0.31"}  # recommended for transforms — auto-installs libvips
-  ]
-end
-```
-
-## Active Storage parity
-
-- [x] Single-file attachment (`attached`)
-- [x] Multi-file attachments — write your own join schema (no macro)
-- [x] Local disk storage
-- [x] Signed URLs with expiry
-- [x] Image variants (resize, crop, rotate)
-- [x] Image analysis (width, height)
-- [x] Video analysis (dimensions, duration, aspect ratio)
-- [x] Audio analysis (duration, bit rate)
-- [x] Video previews (thumbnail from video frame)
-- [x] PDF previews (thumbnail from first page)
-- [x] Content-type detection from magic bytes
-- [x] Orphan cleanup
-- [x] S3 storage (built-in, optional `req` dep)
-- [ ] Mirror service (multi-backend writes)
-- [ ] Direct upload (browser → cloud) — storage layer done: presigned PUT URLs
-  (`Attached.StorageBackends.direct_upload_url/2`, S3 + Disk), purpose-bound
-  upload tokens, orphan grace period. Missing: pending-original creation,
-  signed attach tokens, LiveView `external:` upload helpers.
+Some decisions look wrong at first glance but are deliberate — before you "fix"
+one, read [WHY_DIDNT_YOU.md](WHY_DIDNT_YOU.md).
 
 ## Setup
 
@@ -102,6 +142,9 @@ config :attached, :repo, &MyApp.Tenant.current_repo/0
 
 ### 3. Add the controller route (for serving files)
 
+Only needed for the Disk backend — the S3 backend serves presigned URLs
+directly from S3, no route required.
+
 ```elixir
 # router.ex
 forward "/attachments", Attached.Web.Plug
@@ -118,6 +161,16 @@ forward "/attachments", Attached.Web.Plug
 ```
 
 This exports `attached/1,2` as `locals_without_parens` so the formatter treats it like a DSL macro.
+
+### 5. Make sure Oban is running
+
+Attached's background jobs — metadata extraction after every upload,
+`purge_later/2`, the orphan worker — run through [Oban](https://hex.pm/packages/oban),
+a hard dependency of this package. Jobs go into the `:default` queue, so no
+Attached-specific queue config is needed — but your app must run Oban. If it
+doesn't yet, follow the [Oban installation guide](https://hexdocs.pm/oban/installation.html).
+For the test-environment setup (`testing: :manual`), see the
+[testing guide](docs/testing_with_liveview.md).
 
 ## Usage
 
@@ -163,35 +216,7 @@ end
 
 ### Renaming fields and tables
 
-`attached_originals` tracks every file's `owner_table` and `owner_field`. When you rename a field or table with Ecto, add the matching `Attached.Ecto.Migration.rename` call — otherwise orphan detection silently breaks.
-
-**Renaming a field** (`attached :avatar` → `:profile_picture`):
-
-```elixir
-def up do
-  rename table(:users), :avatar_attached_original_id, to: :profile_picture_attached_original_id
-  Attached.Ecto.Migration.rename table(:users), :avatar, to: :profile_picture
-end
-
-def down do
-  rename table(:users), :profile_picture_attached_original_id, to: :avatar_attached_original_id
-  Attached.Ecto.Migration.rename table(:users), :profile_picture, to: :avatar
-end
-```
-
-**Renaming a table** (`users` → `accounts`):
-
-```elixir
-def up do
-  rename table(:users), to: table(:accounts)
-  Attached.Ecto.Migration.rename table(:users), to: table(:accounts)
-end
-
-def down do
-  rename table(:accounts), to: table(:users)
-  Attached.Ecto.Migration.rename table(:accounts), to: table(:users)
-end
-```
+`attached_originals` tracks every file's `owner_table` and `owner_field`. When you rename a field or table with Ecto, add the matching `Attached.Ecto.Migration.rename` call — otherwise orphan detection silently breaks. See the [renaming guide](docs/renaming_fields_and_tables.md) for the migration recipes.
 
 ### Attaching files
 
@@ -230,6 +255,41 @@ The original record is inserted and the file uploaded inside `prepare_changes/2`
 - A `%{path: path, filename: filename, content_type: ct}` map (e.g. from `Phoenix.LiveView.consume_uploaded_entries/3`)
 - An `Attached.Originals.Original` struct (to re-attach an existing original)
 - `nil` (no-op, leaves the existing attachment untouched)
+
+### Uploads with Phoenix LiveView
+
+With LiveView uploads, consume the entries in your submit handler and pass the
+resulting map into the params. One catch: LiveView deletes the temp file as
+soon as the `consume_uploaded_entries/3` callback returns, but `put_attached/3`
+reads it later, inside the changeset's `prepare_changes/2` — so copy it out
+first:
+
+```elixir
+def mount(_params, _session, socket) do
+  {:ok, allow_upload(socket, :avatar, accept: ~w(.jpg .jpeg .png .webp), max_entries: 1)}
+end
+
+def handle_event("save", %{"user" => params}, socket) do
+  avatar =
+    consume_uploaded_entries(socket, :avatar, fn %{path: path}, entry ->
+      dest = Path.join(System.tmp_dir!(), entry.uuid <> Path.extname(entry.client_name))
+      File.cp!(path, dest)
+      {:ok, %{path: dest, filename: entry.client_name, content_type: entry.client_type}}
+    end)
+    |> List.first()
+
+  case Accounts.update_user(socket.assigns.user, Map.put(params, "avatar", avatar)) do
+    {:ok, _user} -> ...
+    {:error, changeset} -> ...
+  end
+end
+```
+
+`avatar` is `nil` when nothing was uploaded — `put_attached/3` treats that as
+a no-op, so the same handler works with and without a new file. See
+[attached_phoenix_demo](https://github.com/saschabrink/attached_phoenix_demo)
+for the complete flow (form, progress, cancel, remove-image) and the
+[testing guide](docs/testing_with_liveview.md) for testing it.
 
 ### Ingesting files from other sources
 
@@ -275,7 +335,7 @@ The stream primitive is the escape hatch for anything we don't cover directly: S
 ### Querying
 
 ```elixir
-user = Repo.get(User, id) |> Repo.preload(avatar_attached_blob: :variants)
+user = Repo.get(User, id) |> Repo.preload(avatar_attached_original: :variants)
 
 Attached.url(user, :avatar)              # URL to the original file
 Attached.url(user, :avatar, :thumb)      # URL to the thumb variant
@@ -324,7 +384,12 @@ attached :avatar, variants: %{
 
 Only variant names declared in the schema are accepted by `url/3`. Arbitrary transform parameters are not supported — this prevents unbounded variant proliferation from being used as a resource-exhaustion attack.
 
-Transformations are powered by [Vix](https://hex.pm/packages/vix) (libvips NIF). Available operations include `resize_to_fill`, `resize_to_limit`, `resize_to_fit`, `resize_and_pad`, `crop`, `rotate`, and `watermark`.
+Transformations run through the first available image transformer:
+[Vix](https://hex.pm/packages/vix) (libvips NIF, recommended — add `{:vix, "~> 0.31"}`
+to your deps) or ImageMagick (no Elixir package needed, just the `imagemagick`
+system package — the `magick`/`convert` binary is auto-detected). Both support
+the same operations: `resize_to_fill`, `resize_to_limit`, `resize_to_fit`,
+`resize_and_pad`, `crop`, `rotate`, and `watermark`.
 
 ### Purging
 
@@ -542,12 +607,37 @@ Original created (key, filename, content_type, byte_size, checksum)
 3. **Purge** — `Attached.purge/2` deletes the original record, variant records, and files from storage. `purge_later/2` does the same via Oban.
 4. **Cleanup** — `Attached.Originals.PurgeOrphansWorker` finds originals where `owner_table`/`owner_field` no longer match any live FK, and purges them.
 
+## Guides
+
+- [Testing with Phoenix LiveView](docs/testing_with_liveview.md) — test-helper setup, upload-flow assertions, fixture helpers, common pitfalls
+- [Renaming fields and tables](docs/renaming_fields_and_tables.md) — keeping `owner_table`/`owner_field` tracking intact across renames
+- [WHY_DIDNT_YOU.md](WHY_DIDNT_YOU.md) — design decisions that look wrong at first glance but are deliberate
+
+## Active Storage parity
+
+- [x] Single-file attachment (`attached`)
+- [x] Multi-file attachments — write your own join schema (no macro)
+- [x] Local disk storage
+- [x] Signed URLs with expiry
+- [x] Image variants (resize, crop, rotate)
+- [x] Image analysis (width, height)
+- [x] Video analysis (dimensions, duration, aspect ratio)
+- [x] Audio analysis (duration, bit rate)
+- [x] Video previews (thumbnail from video frame)
+- [x] PDF previews (thumbnail from first page)
+- [x] Content-type detection from magic bytes
+- [x] Orphan cleanup
+- [x] S3 storage (built-in, optional `req` dep)
+- [ ] Mirror service (multi-backend writes) — see Roadmap
+- [ ] Direct upload (browser → cloud) — see Roadmap
+
 ## Roadmap
 
 Planned future additions:
 
 | Feature | Notes |
 |---|---|
+| Direct upload | Browser → cloud uploads. Storage layer is done: presigned PUT URLs (`Attached.StorageBackends.direct_upload_url/2`, S3 + Disk), purpose-bound upload tokens, orphan grace period. Missing: pending-original creation, signed attach tokens, LiveView `external:` upload helpers |
 | Mirror backend | `Attached.StorageBackends.Mirror` — a registry entry referencing other instances by name (`primary: :s3_main, mirrors: [:local]`); writes go to all, reads to the primary. Useful for zero-downtime storage migrations |
 | Telemetry | Built-in `:telemetry` events for upload, extract, purge, and transform — consumed by the dashboard and user dashboards alike |
 | Per-row storage backend dispatch | `StorageBackends.download(original)`/`delete(original)` resolve the backend instance from the original's `storage_backend` column, so apps can migrate from Disk to S3 (or run a mirror) without losing access to existing files |

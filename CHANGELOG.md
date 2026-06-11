@@ -1,5 +1,20 @@
 # Changelog
 
+## [Unreleased]
+
+### Documentation
+
+- README restructured: quick start up front, links to the
+  [demo app](https://github.com/saschabrink/attached_phoenix_demo) and
+  [`attached_dashboard`](https://hex.pm/packages/attached_dashboard) (with
+  screenshot), new "Uploads with Phoenix LiveView" section, Oban setup step,
+  ImageMagick documented as a Vix alternative for variants.
+- New hexdocs guides: "Renaming fields and tables" (moved out of the README)
+  and `WHY_DIDNT_YOU.md` (now also shipped in the hex package).
+- Fixed stale pre-rename naming across the docs: `avatar_attached_blob` →
+  `avatar_attached_original`, `Attached.Blobs.*` → `Attached.Originals.*` —
+  the old names made copy-pasted examples fail.
+
 ## [0.2.0] - 2026-06-11
 
 ### Changed — BREAKING

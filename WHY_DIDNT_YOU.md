@@ -5,7 +5,7 @@ about to "fix" one of these, read this first.
 
 ## ...use a more cryptographically secure checksum than MD5?
 
-`Blob.checksum` and `Variant.checksum` are MD5 hashes, base64-encoded. MD5 has
+`Original.checksum` and `Variant.checksum` are MD5 hashes, base64-encoded. MD5 has
 been cryptographically broken since 2004 — so why use it?
 
 Because this checksum is for **integrity**, not **security**:
@@ -41,21 +41,21 @@ analyzing, direct uploads, purging) works on variants for free. It also
 naturally allows variants-of-variants, generic non-image derivatives, and so on.
 
 We took a different route: one `attached_variants` table with everything
-inline — `blob_id`, `name`, `digest`, `content_type`, `byte_size`, `checksum`,
-`metadata`. Reasons:
+inline — `original_id`, `name`, `transform_digest`, `content_type`,
+`byte_size`, `checksum`, `metadata`. Reasons:
 
 - **One join instead of two.** Looking up a variant's content type is a single
   `get_by` against `attached_variants`. AS needs to join through
   `active_storage_attachments` to a second `active_storage_blobs` row.
 - **`name` is a first-class column.** You can query "all `:thumb` variants of
-  this blob" directly in SQL. AS resolves variant names from the
+  this original" directly in SQL. AS resolves variant names from the
   application-level `NamedVariant` registry, not from the DB.
 - **No second random storage key per variant.** The variant's file lives at a
   deterministic path derived from the parent's key (`_variants/<parent_key>-<name>-<digest>`).
   AS allocates a fresh blob with its own random key and tracks it through the
   attachments table.
-- **Clear mental model.** Two tables with explicit roles — `Blob` is an
-  original upload, `Variant` is a deterministic derivative of one — is much
+- **Clear mental model.** Two tables with explicit roles — `Original` is an
+  uploaded file, `Variant` is a deterministic derivative of one — is much
   easier to hold in your head than one self-referential table where every row
   might be either. Fewer edge cases to think about: no cycles to prevent, no
   recursive cascade-delete semantics, no question of whether
@@ -63,7 +63,7 @@ inline — `blob_id`, `name`, `digest`, `content_type`, `byte_size`, `checksum`,
 
 The trade-off we accept: variants are not generic blobs. You can't `mirror`
 them through the same path as originals without separate logic, and
-variants-of-variants is structurally impossible (a `Variant.blob_id`
-references a `Blob`, never another `Variant`). For the common case — a few
+variants-of-variants is structurally impossible (a `Variant.original_id`
+references an `Original`, never another `Variant`). For the common case — a few
 named image/PDF derivatives per upload — that's a feature, not a limitation,
 and it keeps the surface area small.

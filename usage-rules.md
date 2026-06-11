@@ -240,7 +240,7 @@ Article |> Repo.all() |> Repo.preload(images: :original)
   `config :attached, :default_storage_backend, ...` (a name from the
   `:storage_backends` registry).
 - **Don't expect `attached` to work on update if you used a non-UUID
-  primary key.** Blob FKs are `:binary_id` — your owner tables must use
+  primary key.** Original FKs are `:binary_id` — your owner tables must use
   UUIDs too.
 
 ## Pre-1.0 caveat

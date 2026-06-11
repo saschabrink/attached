@@ -21,7 +21,7 @@ Ecto.Adapters.SQL.Sandbox.mode(MyApp.Repo, :manual)
 ```
 
 One directory is shared across the whole `mix test` invocation —
-parallel `async: true` tests don't need per-test isolation because blob
+parallel `async: true` tests don't need per-test isolation because storage
 keys are already unique. The dir lives under `System.tmp_dir!()`, so
 there's nothing to gitignore.
 
@@ -34,7 +34,7 @@ Attached.Test.setup_storage!(root: "test/tmp/storage")
 
 ### Oban in testing mode
 
-`Attached.Blobs.extract_metadata_later/1` enqueues an Oban job after every
+`Attached.Originals.extract_metadata_later/1` enqueues an Oban job after every
 upload. In tests you want jobs *enqueued but not executed* by default, so
 they don't race with assertions:
 
@@ -53,7 +53,7 @@ Oban.drain_queue(queue: :default)
 
 `Phoenix.LiveViewTest` exposes `file_input/3` and `render_upload/3` for
 driving live_file_input components. The pattern: render the LiveView,
-build an upload, submit, then assert a `%Blob{}` exists on the owner.
+build an upload, submit, then assert an `%Original{}` exists on the owner.
 
 ```elixir
 test "user can upload an avatar", %{conn: conn, user: user} do
@@ -75,10 +75,10 @@ test "user can upload an avatar", %{conn: conn, user: user} do
   |> form("#user-form", user: %{name: "Updated"})
   |> render_submit()
 
-  user = MyApp.Repo.get!(User, user.id) |> MyApp.Repo.preload(:avatar_attached_blob)
+  user = MyApp.Repo.get!(User, user.id) |> MyApp.Repo.preload(:avatar_attached_original)
 
-  assert user.avatar_attached_blob.filename == "avatar.png"
-  assert user.avatar_attached_blob.content_type == "image/png"
+  assert user.avatar_attached_original.filename == "avatar.png"
+  assert user.avatar_attached_original.content_type == "image/png"
 end
 ```
 
@@ -88,7 +88,7 @@ Two things to know:
   triggers `consume_uploaded_entries` in your LiveView.
 * The form's `phx-submit` handler is what calls into `attached`. If your
   LiveView consumes uploads in the submit handler (the recommended
-  pattern), the blob won't exist until after `render_submit/2`.
+  pattern), the original won't exist until after `render_submit/2`.
 
 ## Fixture helper for non-upload tests
 
@@ -112,7 +112,7 @@ end
 
 It accepts a file path (filename and content type are inferred), an
 upload-shaped map (`%{path:, filename:, content_type:}`), a `%Plug.Upload{}`,
-or an existing `%Attached.Blobs.Blob{}` for re-attachment without storage I/O.
+or an existing `%Attached.Originals.Original{}` for re-attachment without storage I/O.
 
 ### With ExMachina
 
@@ -171,9 +171,9 @@ or ImageMagick produces a real variant, and you can assert on the result:
 
 ```elixir
 test "preview variant is generated for an image", %{user: user} do
-  user = MyApp.Repo.preload(user, :avatar_attached_blob)
+  user = MyApp.Repo.preload(user, :avatar_attached_original)
 
-  assert {:ok, url} = Attached.Variants.preview_url(user.avatar_attached_blob)
+  assert {:ok, url} = Attached.Variants.preview_url(user.avatar_attached_original)
   assert url =~ "/storage/"
 end
 ```
@@ -190,9 +190,9 @@ Variants are cached as `Attached.Variants.Variant` rows in
 no re-encoding.
 
 `Attached.url(record, field, :variant_name)` requires `:variants` to be
-preloaded on the blob — it raises with a helpful message if you forget.
-Use `Attached.with_attached/2` in your queries (it preloads the blob and
-its variants together) or `Repo.preload(record, avatar_attached_blob: :variants)`
+preloaded on the original — it raises with a helpful message if you forget.
+Use `Attached.with_attached/2` in your queries (it preloads the original and
+its variants together) or `Repo.preload(record, avatar_attached_original: :variants)`
 explicitly.
 
 ## Common pitfalls
@@ -211,11 +211,11 @@ end
 
 **Oban jobs racing with assertions.** Default `testing: :manual` means
 `extract_metadata_later/1` jobs sit in the queue. If a test asserts on
-`blob.metadata`, drain the queue first with `Oban.drain_queue/1` — or run
+`original.metadata`, drain the queue first with `Oban.drain_queue/1` — or run
 the worker directly:
 
 ```elixir
-Attached.Blobs.BlobExtractMetadataWorker.perform(%Oban.Job{args: %{"blob_id" => blob.id}})
+Attached.Originals.ExtractMetadataWorker.perform(%Oban.Job{args: %{"original_id" => original.id}})
 ```
 
 **Stale storage between runs.** If you skip the `at_exit` cleanup and run
@@ -224,7 +224,7 @@ pattern above prevents test-to-test interference; the `at_exit` callback
 handles long-term cleanup. If a test crashes mid-run, the directory
 sticks around — periodic `rm -rf /tmp/attached-test-*` is fine.
 
-**Async tests + shared owner records.** `attached` blobs themselves are
+**Async tests + shared owner records.** `attached` originals themselves are
 isolated per test via the SQL Sandbox, but if two tests both upload to
 the same singleton-style owner record (a `Site` row, say), you'll get
 sandbox conflicts. Use `async: false` for tests that mutate shared

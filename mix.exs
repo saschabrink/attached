@@ -70,7 +70,7 @@ defmodule Attached.MixProject do
         "GitHub" => @source_url,
         "Changelog" => "https://hexdocs.pm/attached/changelog.html"
       },
-      files: ~w(lib docs mix.exs .formatter.exs README.md CHANGELOG.md LICENSE usage-rules.md)
+      files: ~w(lib docs mix.exs .formatter.exs README.md CHANGELOG.md LICENSE usage-rules.md WHY_DIDNT_YOU.md)
     ]
   end
 
@@ -81,7 +81,9 @@ defmodule Attached.MixProject do
       extras: [
         "README.md",
         "CHANGELOG.md",
-        "docs/testing_with_liveview.md"
+        "docs/testing_with_liveview.md",
+        "docs/renaming_fields_and_tables.md",
+        "WHY_DIDNT_YOU.md"
       ],
       skip_undefined_reference_warnings_on: ["CHANGELOG.md"]
     ]
