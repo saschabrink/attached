@@ -43,6 +43,19 @@ defmodule Attached.StorageBackends.Behaviour do
   @callback url(config, key, opts :: keyword()) :: String.t()
 
   @doc """
+  Return the local filesystem path of the file at `key`.
+
+  Optional — only meaningful for backends whose files live on a filesystem
+  the web server can read (e.g. Disk). `Attached.Web.Plug` uses it to serve
+  files via sendfile (zero-copy) instead of buffering them in memory; without
+  it the Plug falls back to `download/2` and `download_chunk/3`.
+
+  The file at the returned path does not have to exist — callers stat it
+  themselves. Return `{:error, reason}` for keys the backend rejects.
+  """
+  @callback path(config, key) :: {:ok, Path.t()} | {:error, term()}
+
+  @doc """
   Return a URL (plus the headers the client must send) for uploading the file
   at `key` directly from the browser via HTTP PUT.
 
@@ -56,5 +69,5 @@ defmodule Attached.StorageBackends.Behaviour do
   @callback direct_upload_url(config, key, opts :: keyword()) ::
               {:ok, %{url: String.t(), headers: [{String.t(), String.t()}]}} | {:error, term()}
 
-  @optional_callbacks direct_upload_url: 3
+  @optional_callbacks direct_upload_url: 3, path: 2
 end

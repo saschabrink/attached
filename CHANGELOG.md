@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+### Added
+
+- `Attached.Web.Plug` answers HTTP Range requests with `206 Partial Content`
+  (and `416` for unsatisfiable ranges), enabling video/audio seeking in the
+  browser. Multi-range requests are ignored and answered with the full file,
+  as RFC 9110 permits.
+- New optional storage backend callback `path/2` — returns the local
+  filesystem path for a key. Implemented by the Disk backend.
+
+### Changed
+
+- `Attached.Web.Plug` no longer buffers files in memory: Disk-backed files
+  are served via sendfile (`Plug.Conn.send_file/5`); backends without a
+  local path serve ranges through `download_chunk/3` and only fall back to
+  whole-file `download/2` for non-range requests.
+
 ### Documentation
 
 - README restructured: quick start up front, links to the

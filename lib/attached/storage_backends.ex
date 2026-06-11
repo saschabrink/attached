@@ -147,6 +147,24 @@ defmodule Attached.StorageBackends do
     end
   end
 
+  @doc """
+  Returns `{:ok, path}` with the local filesystem path of `key` when the
+  default backend implements the optional `path/2` callback (e.g. Disk), or
+  `{:error, :not_supported}` otherwise.
+
+  Used by `Attached.Web.Plug` to serve files via sendfile instead of
+  buffering them in memory.
+  """
+  def path(key) do
+    {mod, config} = default_backend()
+
+    if Code.ensure_loaded?(mod) and function_exported?(mod, :path, 2) do
+      mod.path(config, key)
+    else
+      {:error, :not_supported}
+    end
+  end
+
   defp default_backend, do: resolve!(default_name())
 
   defp infer_default_name do

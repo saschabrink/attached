@@ -110,6 +110,15 @@ defmodule Attached.StorageBackends.Disk do
     {:ok, %{url: "#{base_url(config)}/originals/#{token}", headers: headers}}
   end
 
+  # `path_for/2` raises on keys the backend rejects (blank, traversal) —
+  # the callback contract wants an error tuple so the Plug can 404 instead.
+  @impl true
+  def path(config, key) do
+    {:ok, path_for(config, key)}
+  rescue
+    e in ArgumentError -> {:error, e.message}
+  end
+
   @doc "Returns the absolute filesystem path for a given key."
   def path_for(_config, nil), do: raise(ArgumentError, "key is blank")
 

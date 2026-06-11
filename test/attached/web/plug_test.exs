@@ -98,6 +98,95 @@ defmodule Attached.Web.PlugTest do
     end
   end
 
+  describe "GET /originals/:token with Range header" do
+    # The fixture body is "hello plug" — 10 bytes.
+    setup %{upload: upload} do
+      user =
+        User.changeset(%User{}, %{name: "Test"})
+        |> Attached.Ecto.Changeset.put_attached(:avatar, upload)
+        |> Repo.insert!()
+        |> Repo.preload(avatar_attached_original: :variants)
+
+      url = Attached.url(user, :avatar)
+      {:ok, path: URI.parse(url).path |> String.replace_prefix("/attachments", "")}
+    end
+
+    defp get_range(path, range) do
+      conn(:get, path)
+      |> Plug.Conn.put_req_header("range", range)
+      |> Attached.Web.Plug.call(@opts)
+    end
+
+    test "full responses advertise accept-ranges", %{path: path} do
+      conn = get(path)
+      assert conn.status == 200
+      assert Plug.Conn.get_resp_header(conn, "accept-ranges") == ["bytes"]
+    end
+
+    test "bytes=N-M returns 206 with the slice and Content-Range", %{path: path} do
+      conn = get_range(path, "bytes=0-4")
+      assert conn.status == 206
+      assert conn.resp_body == "hello"
+      assert Plug.Conn.get_resp_header(conn, "content-range") == ["bytes 0-4/10"]
+    end
+
+    test "bytes=N- returns the tail", %{path: path} do
+      conn = get_range(path, "bytes=6-")
+      assert conn.status == 206
+      assert conn.resp_body == "plug"
+      assert Plug.Conn.get_resp_header(conn, "content-range") == ["bytes 6-9/10"]
+    end
+
+    test "bytes=-N returns the last N bytes", %{path: path} do
+      conn = get_range(path, "bytes=-4")
+      assert conn.status == 206
+      assert conn.resp_body == "plug"
+      assert Plug.Conn.get_resp_header(conn, "content-range") == ["bytes 6-9/10"]
+    end
+
+    test "last byte position is clamped to the file size", %{path: path} do
+      conn = get_range(path, "bytes=6-999")
+      assert conn.status == 206
+      assert conn.resp_body == "plug"
+      assert Plug.Conn.get_resp_header(conn, "content-range") == ["bytes 6-9/10"]
+    end
+
+    test "a range beyond the file returns 416", %{path: path} do
+      conn = get_range(path, "bytes=100-")
+      assert conn.status == 416
+      assert Plug.Conn.get_resp_header(conn, "content-range") == ["bytes */10"]
+    end
+
+    test "a malformed range is ignored and the full file served", %{path: path} do
+      conn = get_range(path, "bytes=abc")
+      assert conn.status == 200
+      assert conn.resp_body == "hello plug"
+    end
+
+    test "multi-range requests are ignored and the full file served", %{path: path} do
+      conn = get_range(path, "bytes=0-1,4-5")
+      assert conn.status == 200
+      assert conn.resp_body == "hello plug"
+    end
+
+    test "ranges work for keys without a DB row (e.g. fresh direct uploads)" do
+      key = "rangeable-#{System.unique_integer([:positive])}"
+      :ok = Attached.StorageBackends.upload(key, write_tmp!("0123456789"))
+
+      conn = get_range("/originals/#{Attached.Web.Signer.sign(key)}", "bytes=2-5")
+      assert conn.status == 206
+      assert conn.resp_body == "2345"
+      assert Plug.Conn.get_resp_header(conn, "content-range") == ["bytes 2-5/10"]
+    end
+
+    defp write_tmp!(content) do
+      tmp = Path.join(System.tmp_dir!(), "plug_range_#{System.unique_integer([:positive])}")
+      File.write!(tmp, content)
+      on_exit(fn -> File.rm(tmp) end)
+      tmp
+    end
+  end
+
   describe "unknown routes" do
     test "returns 404" do
       conn = get("/unknown/path")
