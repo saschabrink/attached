@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### Added
+
+- `Attached.StorageBackends.S3` — storage backend for Amazon S3 and
+  S3-compatible services (MinIO, Cloudflare R2, DigitalOcean Spaces) via the
+  optional `req` dependency (already included in new Phoenix apps). SigV4
+  signing is implemented in-house and verified against the official AWS test
+  vectors — no AWS SDK needed. Presigned GET URLs
+  (`Attached.Web.Plug` not involved), ListObjectsV2-based
+  `delete_prefixed/1` with pagination, STS session tokens, and optional
+  `response-content-type` on presigned URLs resolved from the original/variant
+  row. Path-style addressing via the `:endpoint` option for S3-compatibles.
+
 ### Fixed
 
 - `path_for/1` now has an explicit `nil` clause, resolving an Elixir 1.20 type

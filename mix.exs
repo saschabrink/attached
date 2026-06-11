@@ -37,10 +37,13 @@ defmodule Attached.MixProject do
       {:plug, "~> 1.14"},
       {:vix, "~> 0.31", optional: true},
       {:bupe, "~> 0.6", optional: true},
+      # Only needed for the S3 storage backend.
+      {:req, "~> 0.5", optional: true},
       {:ex_doc, "~> 0.31", only: :dev, runtime: false},
       # Test deps
       {:ecto_sqlite3, "~> 0.17", only: :test},
-      {:jason, "~> 1.4", only: [:dev, :test]}
+      # No :only restriction — req requires jason in all envs.
+      {:jason, "~> 1.4"}
     ]
   end
 

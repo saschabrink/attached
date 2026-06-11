@@ -8,7 +8,7 @@ Attached gives your Ecto schemas declarative file attachments with variant suppo
 
 - **No polymorphic associations.** `attached` adds a foreign key column to your schema table. Multi-file attachments are user-defined join schemas with real foreign keys — no hidden join table behind a macro.
 - **Changeset-native.** Attachments flow through your regular changeset pipeline. Works on create (UUIDs are generated before insert) and update alike.
-- **Pluggable storage.** Ships with a `Disk` service. Add your own by implementing the `Attached.StorageBackends.Behaviour` behaviour.
+- **Pluggable storage.** Ships with `Disk` and `S3` services (S3 via the optional `req` dep — already in new Phoenix apps). Add your own by implementing the `Attached.StorageBackends.Behaviour` behaviour.
 - **On-the-fly variants.** Define named variants on your schema. The first `url/3` call generates the transformation on demand and caches it. Only schema-defined variant names are accepted — no ad-hoc transforms.
 - **Cleanup-aware.** Each original tracks its `owner_table` and `owner_field` so orphaned files can be found and purged without scanning every table.
 
@@ -37,8 +37,8 @@ end
 - [x] PDF previews (thumbnail from first page)
 - [x] Content-type detection from magic bytes
 - [x] Orphan cleanup
-- [ ] S3 storage — planned as `attached_s3`
-- [ ] Mirror service (multi-backend writes) — planned as `attached_mirror`
+- [x] S3 storage (built-in, optional `req` dep)
+- [ ] Mirror service (multi-backend writes)
 - [ ] Direct upload (browser → cloud)
 
 ## Setup
@@ -369,6 +369,45 @@ config :attached,
   storage_backend: Attached.StorageBackends.Disk,
   disk: [root: Path.join(["priv", "attachments"])]
 ```
+
+### S3 (built-in)
+
+Stores files on Amazon S3 or any S3-compatible service (MinIO, Cloudflare R2,
+DigitalOcean Spaces). `Attached.url/2,3` returns presigned S3 URLs — files are
+served directly from S3, no plug needed. Request signing (SigV4) is built in.
+
+The only dependency is `req`, which newly generated Phoenix apps already
+include. Add it otherwise:
+
+```elixir
+{:req, "~> 0.5"}
+```
+
+```elixir
+config :attached,
+  storage_backend: Attached.StorageBackends.S3,
+  s3: [
+    bucket: "my-bucket",
+    region: "eu-central-1",
+    access_key_id: System.fetch_env!("AWS_ACCESS_KEY_ID"),
+    secret_access_key: System.fetch_env!("AWS_SECRET_ACCESS_KEY")
+  ]
+```
+
+For S3-compatible services, set `:endpoint` (switches to path-style addressing):
+
+```elixir
+config :attached,
+  s3: [
+    bucket: "my-bucket",
+    endpoint: "http://localhost:9000",
+    access_key_id: "minioadmin",
+    secret_access_key: "minioadmin"
+  ]
+```
+
+See `Attached.StorageBackends.S3` for all options (`:session_token`,
+`:url_expires_in`, `:response_content_type`, `:req_options`).
 
 ### Custom service
 

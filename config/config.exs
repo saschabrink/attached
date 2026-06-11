@@ -17,6 +17,17 @@ if config_env() == :test do
 
   config :attached, ecto_repos: [Attached.TestRepo]
 
+  # S3 backend tests run against a Req.Test plug stub — no real bucket.
+  config :attached,
+    s3: [
+      bucket: "test-bucket",
+      region: "eu-central-1",
+      access_key_id: "AKIATESTKEY",
+      secret_access_key: "test-secret",
+      response_content_type: false,
+      req_options: [plug: {Req.Test, Attached.StorageBackends.S3}, retry: false]
+    ]
+
   config :attached, Oban,
     repo: Attached.TestRepo,
     engine: Oban.Engines.Lite,
