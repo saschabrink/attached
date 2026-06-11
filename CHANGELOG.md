@@ -81,7 +81,46 @@
   name (e.g. `"local"`, `"s3_main"`) instead of the module name
   (`"Attached.StorageBackends.Disk"`) — mirrors Active Storage's
   `service_name`. Existing rows are not migrated automatically; the column is
-  informational only (no dispatch reads it yet).
+  informational only (no dispatch reads it yet), but stale module names skew
+  `Attached.Originals.Stats.by_storage_backend/0` (the same backend shows up
+  as two groups) and will break once per-row dispatch lands.
+
+  **Migration:** map each old module name to the registry instance name you
+  configured, one `UPDATE` per backend:
+
+      defmodule MyApp.Repo.Migrations.MigrateAttachedStorageBackendNames do
+        use Ecto.Migration
+
+        def up do
+          execute """
+          UPDATE attached_originals SET storage_backend = 'local'
+          WHERE storage_backend = 'Attached.StorageBackends.Disk'
+          """
+
+          execute """
+          UPDATE attached_originals SET storage_backend = 's3_main'
+          WHERE storage_backend = 'Attached.StorageBackends.S3'
+          """
+        end
+
+        def down do
+          execute """
+          UPDATE attached_originals SET storage_backend = 'Attached.StorageBackends.Disk'
+          WHERE storage_backend = 'local'
+          """
+
+          execute """
+          UPDATE attached_originals SET storage_backend = 'Attached.StorageBackends.S3'
+          WHERE storage_backend = 's3_main'
+          """
+        end
+      end
+
+  Replace `'local'`/`'s3_main'` with the instance names from your
+  `config :attached, :storage_backends` registry. Check
+  `SELECT DISTINCT storage_backend FROM attached_originals` for module names
+  (containing dots) to find rows that still need migrating. Only
+  `attached_originals` carries this column — `attached_variants` does not.
 - `Attached.Test.setup_storage!/1` now configures the registry with a single
   Disk instance named `:local`.
 
