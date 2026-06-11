@@ -512,6 +512,36 @@ defmodule AttachedTest do
 
       assert Attached.Originals.get_owner(original) == nil
     end
+
+    test "returns nil for legacy rows whose owner names are not plain identifiers" do
+      # Simulate a row from before ingest-time validation by inserting the
+      # struct directly — Repo.insert!/1 on a struct bypasses the changeset.
+      original =
+        Repo.insert!(%Attached.Originals.Original{
+          key: "k-#{System.unique_integer([:positive])}",
+          filename: "f.txt",
+          content_type: "text/plain",
+          byte_size: 1,
+          checksum: "c",
+          storage_backend: "local",
+          owner_table: ~s(users"; DROP TABLE users;--),
+          owner_field: "avatar_attached_original_id"
+        })
+
+      assert Attached.Originals.get_owner(original) == nil
+    end
+  end
+
+  describe "Originals.Scopes.orphans/3" do
+    test "raises when owner names are not plain SQL identifiers" do
+      assert_raise ArgumentError, ~r/owner_table .* not a plain SQL identifier/, fn ->
+        Attached.Originals.list(query: &Attached.Originals.Scopes.orphans(&1, ~s(users"; DROP), "avatar_attached_original_id"))
+      end
+
+      assert_raise ArgumentError, ~r/owner_field .* not a plain SQL identifier/, fn ->
+        Attached.Originals.list(query: &Attached.Originals.Scopes.orphans(&1, "users", "x; --"))
+      end
+    end
   end
 
   describe "purge/3" do

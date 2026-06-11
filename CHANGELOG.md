@@ -13,6 +13,12 @@
 
 ### Changed
 
+- `owner_table` and `owner_field` are now validated as plain SQL identifiers
+  (`[a-zA-Z_][a-zA-Z0-9_]*`) at ingest time — they are spliced into SQL
+  identifier positions (`Attached.Originals.get_owner/1`, orphan scopes)
+  where they cannot be bound as parameters. `Scopes.orphans/3` raises
+  `ArgumentError` for invalid names; `get_owner/1` returns `nil` for legacy
+  rows that predate the validation.
 - `Attached.url/2,3`, `Attached.attached?/2`, `Attached.purge/2`, and
   `Attached.purge_later/2` now raise `ArgumentError` when called with a field
   that is not declared via `attached` (previously: silent `nil`/`false`/no-op).

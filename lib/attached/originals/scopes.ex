@@ -12,6 +12,8 @@ defmodule Attached.Originals.Scopes do
 
   import Ecto.Query
 
+  alias Attached.Originals.Original
+
   @doc """
   Restricts a query to originals belonging to a specific `(owner_table, owner_field)` group.
   """
@@ -29,9 +31,15 @@ defmodule Attached.Originals.Scopes do
   `owner_field` column. The group is required because SQL identifiers
   (table/column names) can't be bound per row — iterate
   `Attached.Originals.list_owner_groups/0` to cover every group.
+
+  Raises `ArgumentError` unless both names are plain SQL identifiers
+  (`Attached.Originals.Original.valid_identifier?/1`) — they are spliced into
+  the query as identifiers, not bound as parameters.
   """
   def orphans(query, owner_table, owner_field)
       when is_binary(owner_table) and is_binary(owner_field) do
+    validate_identifiers!(owner_table, owner_field)
+
     query
     |> by_owner(owner_table, owner_field)
     |> where(
@@ -71,5 +79,16 @@ defmodule Attached.Originals.Scopes do
   defp past_grace_period(query, seconds) when is_integer(seconds) and seconds > 0 do
     cutoff = DateTime.utc_now() |> DateTime.add(-seconds, :second) |> DateTime.truncate(:second)
     where(query, [b], b.inserted_at < ^cutoff)
+  end
+
+  defp validate_identifiers!(owner_table, owner_field) do
+    for {label, value} <- [{"owner_table", owner_table}, {"owner_field", owner_field}],
+        not Original.valid_identifier?(value) do
+      raise ArgumentError,
+            "#{label} #{inspect(value)} is not a plain SQL identifier " <>
+              "(letters, digits, underscores, not starting with a digit)"
+    end
+
+    :ok
   end
 end

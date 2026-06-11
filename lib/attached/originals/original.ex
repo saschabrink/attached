@@ -39,12 +39,30 @@ defmodule Attached.Originals.Original do
     timestamps()
   end
 
+  @identifier_format ~r/^[a-zA-Z_][a-zA-Z0-9_]*$/
+
   def changeset(original \\ %__MODULE__{}, attrs) do
     original
     |> cast(attrs, ~w(key filename content_type byte_size checksum metadata storage_backend owner_table owner_field)a)
     |> validate_required(~w(key filename content_type byte_size checksum storage_backend owner_table owner_field)a)
+    |> validate_format(:owner_table, @identifier_format, message: "must be a plain SQL identifier")
+    |> validate_format(:owner_field, @identifier_format, message: "must be a plain SQL identifier")
     |> unique_constraint(:key)
   end
+
+  @doc """
+  Returns `true` when `value` is a plain SQL identifier — letters, digits,
+  and underscores, not starting with a digit.
+
+  `owner_table` and `owner_field` end up in SQL *identifier* positions
+  (`Attached.Originals.get_owner/1`, `Attached.Originals.Scopes.orphans/3`)
+  where they cannot be bound as query parameters, so `changeset/2` restricts
+  them to this shape at ingest time. Schema-qualified names (`"public.users"`)
+  are deliberately rejected — the interpolation sites treat the value as a
+  single identifier.
+  """
+  def valid_identifier?(value) when is_binary(value), do: value =~ @identifier_format
+  def valid_identifier?(_), do: false
 
   @base36 ~c"0123456789abcdefghijklmnopqrstuvwxyz"
 

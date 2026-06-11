@@ -74,6 +74,44 @@ defmodule Attached.Originals.OriginalTest do
 
       assert changeset.valid?
     end
+
+    test "rejects owner_table/owner_field that are not plain SQL identifiers" do
+      for bad <- [~s(users"; DROP TABLE users;--), "public.users", "users table", "1users", ""] do
+        changeset =
+          Attached.Originals.Original.changeset(%{
+            key: "abc123",
+            filename: "file.txt",
+            content_type: "text/plain",
+            byte_size: 11,
+            checksum: "abc==",
+            storage_backend: "local",
+            owner_table: bad,
+            owner_field: bad
+          })
+
+        refute changeset.valid?, "expected #{inspect(bad)} to be rejected"
+        errors = Keyword.keys(changeset.errors)
+        assert :owner_table in errors
+        assert :owner_field in errors
+      end
+    end
+  end
+
+  describe "valid_identifier?/1" do
+    test "accepts plain SQL identifiers" do
+      assert Attached.Originals.Original.valid_identifier?("users")
+      assert Attached.Originals.Original.valid_identifier?("avatar_attached_original_id")
+      assert Attached.Originals.Original.valid_identifier?("_private")
+      assert Attached.Originals.Original.valid_identifier?("Table2")
+    end
+
+    test "rejects everything else" do
+      refute Attached.Originals.Original.valid_identifier?("public.users")
+      refute Attached.Originals.Original.valid_identifier?(~s(users"))
+      refute Attached.Originals.Original.valid_identifier?("1users")
+      refute Attached.Originals.Original.valid_identifier?("")
+      refute Attached.Originals.Original.valid_identifier?(nil)
+    end
   end
 
   describe "key format" do

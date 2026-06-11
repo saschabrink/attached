@@ -225,20 +225,26 @@ defmodule Attached.Originals do
 
   Queries `original.owner_table` for a row whose `original.owner_field` equals
   `original.id` and returns it as a plain map. Returns `nil` if no such row
-  exists, or if `owner_field` is not a real column on `owner_table`
-  (e.g. legacy rows pointing at a removed field).
+  exists, if `owner_field` is not a real column on `owner_table` (e.g. legacy
+  rows pointing at a removed field), or if either name is not a plain SQL
+  identifier (rows from before ingest-time validation).
   """
   def get_owner(%Original{owner_table: table, owner_field: field, id: id}) do
-    repo = Attached.Repo.current()
-    placeholder = if repo.__adapter__() == Ecto.Adapters.Postgres, do: "$1", else: "?"
-    sql = ~s(SELECT * FROM "#{table}" WHERE "#{field}" = #{placeholder} LIMIT 1)
+    # The names are spliced into the SQL as identifiers — only proceed when
+    # they match the shape the changeset enforces. Rows that predate that
+    # validation fall back to the "broken reference" semantics: nil.
+    if Original.valid_identifier?(table) and Original.valid_identifier?(field) do
+      repo = Attached.Repo.current()
+      placeholder = if repo.__adapter__() == Ecto.Adapters.Postgres, do: "$1", else: "?"
+      sql = ~s(SELECT * FROM "#{table}" WHERE "#{field}" = #{placeholder} LIMIT 1)
 
-    case Ecto.Adapters.SQL.query(repo, sql, [id]) do
-      {:ok, %{columns: cols, rows: [row]}} ->
-        cols |> Enum.zip(row) |> Map.new(fn {k, v} -> {String.to_atom(k), v} end)
+      case Ecto.Adapters.SQL.query(repo, sql, [id]) do
+        {:ok, %{columns: cols, rows: [row]}} ->
+          cols |> Enum.zip(row) |> Map.new(fn {k, v} -> {String.to_atom(k), v} end)
 
-      _ ->
-        nil
+        _ ->
+          nil
+      end
     end
   rescue
     _ -> nil
