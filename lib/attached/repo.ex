@@ -21,9 +21,12 @@ defmodule Attached.Repo do
       # capture
       config :attached, :repo, &MyApp.Tenant.current_repo/0
 
-  Without explicit config, Attached falls back to the first `:ecto_repos`
-  entry of any loaded application — convenient for single-repo apps where
-  you haven't wired Attached up yet.
+  Without explicit config, Attached falls back to the `:ecto_repos` entry of
+  the loaded applications — but only when there is exactly one repo across
+  all of them. Convenient for single-repo apps where you haven't wired
+  Attached up yet; with several repos (umbrellas, multi-app setups) the
+  fallback raises instead of silently picking one, since the order of loaded
+  applications is undefined.
 
   ## Why no per-call `:repo` option?
 
@@ -38,33 +41,45 @@ defmodule Attached.Repo do
   """
   def current do
     case Application.get_env(:attached, :repo) do
-      nil -> infer() || raise_missing()
+      nil -> infer()
       mod when is_atom(mod) -> mod
       {mod, fun} -> apply(mod, fun, [])
       fun when is_function(fun, 0) -> fun.()
     end
   end
 
+  # Only one configured repo across all loaded applications is unambiguous.
+  # `:application.loaded_applications/0` has no defined order, so "first
+  # match" would make multi-repo setups (umbrellas) pick nondeterministically.
   defp infer do
-    :application.loaded_applications()
-    |> Enum.find_value(fn {app, _, _} ->
-      case Application.get_env(app, :ecto_repos) do
-        [repo | _] -> repo
-        _ -> nil
-      end
-    end)
-  end
+    repos =
+      :application.loaded_applications()
+      |> Enum.flat_map(fn {app, _, _} -> List.wrap(Application.get_env(app, :ecto_repos, [])) end)
+      |> Enum.uniq()
 
-  defp raise_missing do
-    raise """
-    Could not determine the Ecto repo. Configure it:
+    case repos do
+      [repo] ->
+        repo
 
-        config :attached, :repo, MyApp.Repo
+      [] ->
+        raise """
+        Could not determine the Ecto repo. Configure it:
 
-    For dynamic repos, pass a {mod, fun} tuple or a 0-arity function:
+            config :attached, :repo, MyApp.Repo
 
-        config :attached, :repo, {MyApp.Tenant, :current_repo}
-        config :attached, :repo, &MyApp.Tenant.current_repo/0
-    """
+        For dynamic repos, pass a {mod, fun} tuple or a 0-arity function:
+
+            config :attached, :repo, {MyApp.Tenant, :current_repo}
+            config :attached, :repo, &MyApp.Tenant.current_repo/0
+        """
+
+      repos ->
+        raise ArgumentError, """
+        Multiple Ecto repos found (#{inspect(repos)}) — refusing to pick one
+        by application load order. Configure the repo Attached should use:
+
+            config :attached, :repo, #{inspect(hd(repos))}
+        """
+    end
   end
 end

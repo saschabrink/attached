@@ -13,6 +13,11 @@
 
 ### Changed
 
+- Repo inference (no `config :attached, :repo` set) now only accepts an
+  unambiguous result: exactly one repo across all loaded applications'
+  `:ecto_repos`. With several repos it raises instead of silently picking
+  one by application load order, which is undefined. Same resolution rule
+  as the storage backend registry default.
 - `owner_table` and `owner_field` are now validated as plain SQL identifiers
   (`[a-zA-Z_][a-zA-Z0-9_]*`) at ingest time — they are spliced into SQL
   identifier positions (`Attached.Originals.get_owner/1`, orphan scopes)
