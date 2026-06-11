@@ -2,6 +2,42 @@
 
 ## [Unreleased]
 
+### Changed — BREAKING
+
+- Storage backends are now **named instances** in a registry, replacing the
+  single global backend pick (`config :attached, :storage_backend, Module` +
+  per-module config keys like `:disk`/`:s3`):
+
+      # Before
+      config :attached,
+        storage_backend: Attached.StorageBackends.S3,
+        s3: [bucket: "my-bucket", ...]
+
+      # After
+      config :attached,
+        storage_backends: [
+          s3_main: {Attached.StorageBackends.S3, bucket: "my-bucket", ...}
+        ]
+
+  The default instance is the only registry entry, or — with several
+  entries — the one named by `config :attached, :default_storage_backend`.
+  Old config keys (`:storage_backend`, `:service`, `:disk`, `:s3`) raise
+  with migration instructions instead of silently falling back to Disk.
+  This makes multiple instances of the same backend possible (e.g. two S3
+  buckets) and is the groundwork for the planned mirror backend and per-row
+  dispatch.
+- `Attached.StorageBackends.Behaviour` callbacks take the instance's config
+  keyword as their first argument (`upload(config, key, source_path, opts)`,
+  `download(config, key)`, ...). Custom backends must be updated; backend
+  modules no longer read global application config.
+- The `storage_backend` column on `attached_originals` records the instance
+  name (e.g. `"local"`, `"s3_main"`) instead of the module name
+  (`"Attached.StorageBackends.Disk"`) — mirrors Active Storage's
+  `service_name`. Existing rows are not migrated automatically; the column is
+  informational only (no dispatch reads it yet).
+- `Attached.Test.setup_storage!/1` now configures the registry with a single
+  Disk instance named `:local`.
+
 ### Added
 
 - `Attached.StorageBackends.S3` — storage backend for Amazon S3 and

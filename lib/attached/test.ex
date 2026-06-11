@@ -10,8 +10,12 @@ defmodule Attached.Test do
   alias Attached.Originals.Original
 
   @doc """
-  Configures the Disk storage backend against a unique tmp directory and
-  registers an `at_exit` cleanup. Returns the storage root.
+  Configures the storage backend registry to a single Disk instance named
+  `:local` against a unique tmp directory and registers an `at_exit` cleanup.
+  Returns the storage root.
+
+  Replaces any `:storage_backends` config for the test run — ingested
+  originals record `"local"` in their `storage_backend` column.
 
   Call once from `test_helper.exs`:
 
@@ -39,8 +43,7 @@ defmodule Attached.Test do
     File.rm_rf!(root)
     File.mkdir_p!(root)
 
-    Application.put_env(:attached, :service, Attached.StorageBackends.Disk)
-    Application.put_env(:attached, :disk, root: root, base_url: base_url)
+    Application.put_env(:attached, :storage_backends, local: {Attached.StorageBackends.Disk, root: root, base_url: base_url})
 
     System.at_exit(fn _ -> File.rm_rf!(root) end)
 

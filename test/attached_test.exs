@@ -31,7 +31,7 @@ defmodule AttachedTest do
       assert original.owner_field == "avatar_attached_original_id"
       assert original.checksum != nil
       assert original.key != nil
-      assert original.storage_backend == "Attached.StorageBackends.Disk"
+      assert original.storage_backend == "local"
       assert_enqueued(worker: Attached.Originals.ExtractMetadataWorker, args: %{original_id: original.id})
     end
 
@@ -42,9 +42,9 @@ defmodule AttachedTest do
         |> Repo.insert!()
 
       original = Repo.get!(Attached.Originals.Original, user.avatar_attached_original_id)
-      assert Attached.StorageBackends.Disk.exists?(original.key)
+      assert Attached.StorageBackends.exists?(original.key)
 
-      {:ok, data} = Attached.StorageBackends.Disk.download(original.key)
+      {:ok, data} = Attached.StorageBackends.download(original.key)
       assert data == "hello world"
     end
 
@@ -197,7 +197,7 @@ defmodule AttachedTest do
       assert url =~ "/attachments/originals/"
       token = url |> String.split("/originals/") |> List.last()
       assert {:ok, path} = Attached.Web.Signer.verify(token)
-      assert Attached.StorageBackends.Disk.exists?(path)
+      assert Attached.StorageBackends.exists?(path)
 
       variant = Attached.Variants.get_by_path(path)
       assert variant.name == "thumb"
@@ -501,11 +501,11 @@ defmodule AttachedTest do
         |> Repo.preload(:avatar_attached_original)
 
       original = user.avatar_attached_original
-      assert Attached.StorageBackends.Disk.exists?(original.key)
+      assert Attached.StorageBackends.exists?(original.key)
 
       Attached.purge(user, :avatar)
 
-      refute Attached.StorageBackends.Disk.exists?(original.key)
+      refute Attached.StorageBackends.exists?(original.key)
       assert Repo.get(Attached.Originals.Original, original.id) == nil
     end
   end

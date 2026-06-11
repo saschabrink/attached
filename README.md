@@ -74,9 +74,20 @@ Which creates two tables:
 # config/config.exs
 config :attached,
   repo: MyApp.Repo,
-  storage_backend: Attached.StorageBackends.Disk,
-  disk: [
-    root: Path.join(["priv", "attachments"])
+  storage_backends: [
+    local: {Attached.StorageBackends.Disk, root: Path.join(["priv", "attachments"])}
+  ]
+```
+
+Backends are named instances in a registry. With a single entry it is the
+default automatically; with several, pick one:
+
+```elixir
+config :attached,
+  default_storage_backend: :s3_main,
+  storage_backends: [
+    local: {Attached.StorageBackends.Disk, root: "priv/attachments"},
+    s3_main: {Attached.StorageBackends.S3, bucket: "my-bucket", ...}
   ]
 ```
 
@@ -369,8 +380,9 @@ Stores files on the local filesystem. Serves them via `Attached.Web.Plug`.
 
 ```elixir
 config :attached,
-  storage_backend: Attached.StorageBackends.Disk,
-  disk: [root: Path.join(["priv", "attachments"])]
+  storage_backends: [
+    local: {Attached.StorageBackends.Disk, root: Path.join(["priv", "attachments"])}
+  ]
 ```
 
 ### S3 (built-in)
@@ -388,12 +400,12 @@ include. Add it otherwise:
 
 ```elixir
 config :attached,
-  storage_backend: Attached.StorageBackends.S3,
-  s3: [
-    bucket: "my-bucket",
-    region: "eu-central-1",
-    access_key_id: System.fetch_env!("AWS_ACCESS_KEY_ID"),
-    secret_access_key: System.fetch_env!("AWS_SECRET_ACCESS_KEY")
+  storage_backends: [
+    s3_main: {Attached.StorageBackends.S3,
+      bucket: "my-bucket",
+      region: "eu-central-1",
+      access_key_id: System.fetch_env!("AWS_ACCESS_KEY_ID"),
+      secret_access_key: System.fetch_env!("AWS_SECRET_ACCESS_KEY")}
   ]
 ```
 
@@ -401,11 +413,12 @@ For S3-compatible services, set `:endpoint` (switches to path-style addressing):
 
 ```elixir
 config :attached,
-  s3: [
-    bucket: "my-bucket",
-    endpoint: "http://localhost:9000",
-    access_key_id: "minioadmin",
-    secret_access_key: "minioadmin"
+  storage_backends: [
+    s3_main: {Attached.StorageBackends.S3,
+      bucket: "my-bucket",
+      endpoint: "http://localhost:9000",
+      access_key_id: "minioadmin",
+      secret_access_key: "minioadmin"}
   ]
 ```
 
@@ -416,37 +429,46 @@ See `Attached.StorageBackends.S3` for all options (`:session_token`,
 
 Implement the `Attached.StorageBackends.Behaviour` behaviour:
 
-> **Note:** Only one backend is active at a time — the one configured as `:storage_backend`. Each original row stores the backend module name in its `storage_backend` column for audit purposes, but uploads, downloads, and deletes currently dispatch through the app-wide config. Switching the configured backend means losing access to originals written by the previous one. Per-row dispatch is on the roadmap.
+> **Note:** Only one backend instance is active at a time — the one resolved as the default (`:default_storage_backend`, or the only registry entry). Each original row stores the instance name in its `storage_backend` column for audit purposes, but uploads, downloads, and deletes currently dispatch through the app-wide default. Switching the default means losing access to originals written by the previous one. Per-row dispatch is on the roadmap.
 
+
+Every callback receives the instance's config keyword (its registry entry)
+as the first argument — backend modules hold no global state.
 
 ```elixir
 defmodule MyApp.Storage.Custom do
   @behaviour Attached.StorageBackends.Behaviour
 
   @impl true
-  def upload(key, source_path, opts \\ []), do: ...
+  def upload(config, key, source_path, opts \\ []), do: ...
 
   @impl true
-  def download(key), do: ...
+  def download(config, key), do: ...
 
   @impl true
-  def download_chunk(key, range), do: ...
+  def download_chunk(config, key, range), do: ...
 
   @impl true
-  def compose(source_keys, destination_key), do: ...
+  def compose(config, source_keys, destination_key), do: ...
 
   @impl true
-  def delete(key), do: ...
+  def delete(config, key), do: ...
 
   @impl true
-  def delete_prefixed(prefix), do: ...
+  def delete_prefixed(config, prefix), do: ...
 
   @impl true
-  def exists?(key), do: ...
+  def exists?(config, key), do: ...
 
   @impl true
-  def url(key, opts \\ []), do: ...
+  def url(config, key, opts \\ []), do: ...
 end
+
+# Register it like any built-in:
+config :attached,
+  storage_backends: [
+    custom: {MyApp.Storage.Custom, any: "options", your: "backend needs"}
+  ]
 ```
 
 ## How it works
@@ -522,15 +544,13 @@ Original created (key, filename, content_type, byte_size, checksum)
 
 ## Roadmap
 
-Features planned as separate packages or future additions:
+Planned future additions:
 
 | Feature | Notes |
 |---|---|
-| S3 storage | Will ship as `attached_s3` — a separate package implementing `Attached.StorageBackends.Behaviour` for AWS S3 with Signature V4 signed URLs |
-| Direct upload | Browser uploads directly to S3/GCS. Requires `url_for_direct_upload` + `headers_for_direct_upload` callbacks on the service |
-| Mirror service | `Attached.StorageBackends.Mirror` — writes to multiple backends, reads from primary. Useful for zero-downtime storage migrations |
+| Mirror backend | `Attached.StorageBackends.Mirror` — a registry entry referencing other instances by name (`primary: :s3_main, mirrors: [:local]`); writes go to all, reads to the primary. Useful for zero-downtime storage migrations |
 | Telemetry | Built-in `:telemetry` events for upload, extract, purge, and transform — consumed by the dashboard and user dashboards alike |
-| Per-row storage backend dispatch | `StorageBackends.download(original)`/`delete(original)` resolve the backend from the original's `storage_backend` column, so apps can migrate from Disk to S3 (or run a mirror) without losing access to existing files |
+| Per-row storage backend dispatch | `StorageBackends.download(original)`/`delete(original)` resolve the backend instance from the original's `storage_backend` column, so apps can migrate from Disk to S3 (or run a mirror) without losing access to existing files |
 
 ## License
 

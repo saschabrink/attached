@@ -14,7 +14,7 @@ defmodule Attached.Web.Plug do
       the decoded key).
     * `PUT /originals/:token` — accepts a direct upload for the key behind
       the token. Only tokens signed with the `"direct_upload"` purpose are
-      accepted (see `Attached.StorageBackends.Disk.direct_upload_url/2`), so
+      accepted (see `Attached.StorageBackends.direct_upload_url/2`), so
       download URLs can never be replayed as uploads. When the client sends a
       `Content-MD5` header, the received bytes are verified against it — the
       same check S3 performs.

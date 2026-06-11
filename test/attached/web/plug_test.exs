@@ -107,7 +107,7 @@ defmodule Attached.Web.PlugTest do
 
   describe "PUT /originals/:token (direct upload)" do
     defp direct_upload_path(key, opts \\ []) do
-      {:ok, %{url: url}} = Attached.StorageBackends.Disk.direct_upload_url(key, opts)
+      {:ok, %{url: url}} = Attached.StorageBackends.direct_upload_url(key, opts)
       String.replace_prefix(url, "/attachments", "")
     end
 
@@ -164,7 +164,7 @@ defmodule Attached.Web.PlugTest do
       assert conn.status == 403
 
       # Upload token used for download → 403.
-      {:ok, %{url: url}} = Attached.StorageBackends.Disk.direct_upload_url(key)
+      {:ok, %{url: url}} = Attached.StorageBackends.direct_upload_url(key)
       conn = get(String.replace_prefix(url, "/attachments", ""))
       assert conn.status == 403
 

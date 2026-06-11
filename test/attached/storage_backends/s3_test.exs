@@ -5,6 +5,17 @@ defmodule Attached.StorageBackends.S3Test do
 
   @stub Attached.StorageBackends.S3
 
+  # Instance config as the facade would pass it from the registry —
+  # S3 backend tests run against a Req.Test plug stub, no real bucket.
+  @config [
+    bucket: "test-bucket",
+    region: "eu-central-1",
+    access_key_id: "AKIATESTKEY",
+    secret_access_key: "test-secret",
+    response_content_type: false,
+    req_options: [plug: {Req.Test, Attached.StorageBackends.S3}, retry: false]
+  ]
+
   defp stub(fun), do: Req.Test.stub(@stub, fun)
 
   describe "upload/3" do
@@ -21,7 +32,7 @@ defmodule Attached.StorageBackends.S3Test do
       File.write!(tmp, "hello s3")
       on_exit(fn -> File.rm(tmp) end)
 
-      assert :ok = S3.upload("abc123", tmp)
+      assert :ok = S3.upload(@config, "abc123", tmp)
 
       assert_received {:request, "PUT", "/abc123", "hello s3", headers}
       assert {"authorization", "AWS4-HMAC-SHA256 " <> _} = List.keyfind(headers, "authorization", 0)
@@ -35,7 +46,7 @@ defmodule Attached.StorageBackends.S3Test do
       File.write!(tmp, "x")
       on_exit(fn -> File.rm(tmp) end)
 
-      assert {:error, {:http, 403, "denied"}} = S3.upload("abc123", tmp)
+      assert {:error, {:http, 403, "denied"}} = S3.upload(@config, "abc123", tmp)
     end
   end
 
@@ -47,13 +58,13 @@ defmodule Attached.StorageBackends.S3Test do
         Plug.Conn.send_resp(conn, 200, "object-bytes")
       end)
 
-      assert {:ok, "object-bytes"} = S3.download("some-key")
+      assert {:ok, "object-bytes"} = S3.download(@config, "some-key")
     end
 
     test "maps 404 to :not_found" do
       stub(fn conn -> Plug.Conn.send_resp(conn, 404, "") end)
 
-      assert {:error, :not_found} = S3.download("missing")
+      assert {:error, :not_found} = S3.download(@config, "missing")
     end
   end
 
@@ -64,7 +75,7 @@ defmodule Attached.StorageBackends.S3Test do
         Plug.Conn.send_resp(conn, 206, "0123456789")
       end)
 
-      assert {:ok, "0123456789"} = S3.download_chunk("some-key", 10..19)
+      assert {:ok, "0123456789"} = S3.download_chunk(@config, "some-key", 10..19)
     end
   end
 
@@ -87,24 +98,24 @@ defmodule Attached.StorageBackends.S3Test do
         end
       end)
 
-      assert :ok = S3.compose(["part-a", "part-b"], "combined")
+      assert :ok = S3.compose(@config, ["part-a", "part-b"], "combined")
       assert_received {:composed, "AAABBB"}
     end
 
     test "halts on a missing source" do
       stub(fn conn -> Plug.Conn.send_resp(conn, 404, "") end)
 
-      assert {:error, :not_found} = S3.compose(["gone"], "combined")
+      assert {:error, :not_found} = S3.compose(@config, ["gone"], "combined")
     end
   end
 
   describe "delete/1" do
     test "treats 204 and 404 as success" do
       stub(fn conn -> Plug.Conn.send_resp(conn, 204, "") end)
-      assert :ok = S3.delete("some-key")
+      assert :ok = S3.delete(@config, "some-key")
 
       stub(fn conn -> Plug.Conn.send_resp(conn, 404, "") end)
-      assert :ok = S3.delete("already-gone")
+      assert :ok = S3.delete(@config, "already-gone")
     end
   end
 
@@ -150,7 +161,7 @@ defmodule Attached.StorageBackends.S3Test do
         end
       end)
 
-      assert :ok = S3.delete_prefixed("_variants/parent")
+      assert :ok = S3.delete_prefixed(@config, "_variants/parent")
 
       assert_received {:deleted, "/_variants/parent-thumb-aaaa"}
       assert_received {:deleted, "/_variants/parent-medium-bbbb"}
@@ -165,16 +176,16 @@ defmodule Attached.StorageBackends.S3Test do
         Plug.Conn.send_resp(conn, 200, "")
       end)
 
-      assert S3.exists?("some-key")
+      assert S3.exists?(@config, "some-key")
 
       stub(fn conn -> Plug.Conn.send_resp(conn, 404, "") end)
-      refute S3.exists?("missing")
+      refute S3.exists?(@config, "missing")
     end
   end
 
   describe "url/2" do
     test "presigns a virtual-host GET URL with the default expiry" do
-      url = S3.url("abc123def")
+      url = S3.url(@config, "abc123def")
 
       assert url =~ "https://test-bucket.s3.eu-central-1.amazonaws.com/abc123def?"
       assert url =~ "X-Amz-Signature="
@@ -183,20 +194,20 @@ defmodule Attached.StorageBackends.S3Test do
     end
 
     test "honors expires_in" do
-      assert S3.url("abc123def", expires_in: 60) =~ "X-Amz-Expires=60"
+      assert S3.url(@config, "abc123def", expires_in: 60) =~ "X-Amz-Expires=60"
     end
 
     test "unwraps tokens produced by Attached.Web.Signer" do
       token = Attached.Web.Signer.sign("abc123def")
       refute token == "abc123def"
 
-      assert S3.url(token) =~ "amazonaws.com/abc123def?"
+      assert S3.url(@config, token) =~ "amazonaws.com/abc123def?"
     end
 
     test "passes raw variant keys through unchanged" do
       # "_variants/..." contains "/", which is not Base64url — Signer.verify
       # fails and the key is used as-is.
-      assert S3.url("_variants/parent-thumb-aaaa") =~ "amazonaws.com/_variants/parent-thumb-aaaa?"
+      assert S3.url(@config, "_variants/parent-thumb-aaaa") =~ "amazonaws.com/_variants/parent-thumb-aaaa?"
     end
   end
 
@@ -205,7 +216,7 @@ defmodule Attached.StorageBackends.S3Test do
       checksum = Base.encode64(:crypto.hash(:md5, "body"))
 
       assert {:ok, %{url: url, headers: headers}} =
-               S3.direct_upload_url("abc123def",
+               S3.direct_upload_url(@config, "abc123def",
                  content_type: "image/png",
                  checksum: checksum,
                  byte_size: 4
@@ -222,7 +233,7 @@ defmodule Attached.StorageBackends.S3Test do
     end
 
     test "omits headers for options not given" do
-      assert {:ok, %{url: url, headers: []}} = S3.direct_upload_url("abc123def")
+      assert {:ok, %{url: url, headers: []}} = S3.direct_upload_url(@config, "abc123def")
       assert url =~ "X-Amz-SignedHeaders=host"
     end
 
@@ -243,12 +254,9 @@ defmodule Attached.StorageBackends.S3Test do
 
   describe "path-style endpoints" do
     test "bucket precedes the key in the URL path" do
-      original = Application.get_env(:attached, :s3)
+      config = Keyword.put(@config, :endpoint, "http://localhost:9000/")
 
-      Application.put_env(:attached, :s3, Keyword.put(original, :endpoint, "http://localhost:9000/"))
-      on_exit(fn -> Application.put_env(:attached, :s3, original) end)
-
-      assert S3.url("abc123def") =~ "http://localhost:9000/test-bucket/abc123def?"
+      assert S3.url(config, "abc123def") =~ "http://localhost:9000/test-bucket/abc123def?"
     end
   end
 end

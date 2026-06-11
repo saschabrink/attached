@@ -85,10 +85,14 @@ insert join rows yourself.
 
    ```elixir
    config :attached,
-     storage_backend: Attached.StorageBackends.Disk,
-     disk: [root: Path.join(["priv", "attachments"])],
+     storage_backends: [
+       local: {Attached.StorageBackends.Disk, root: Path.join(["priv", "attachments"])}
+     ],
      repo: MyApp.Repo
    ```
+
+   Backends are named instances; a single entry is the default automatically.
+   With several entries, set `config :attached, :default_storage_backend, :name`.
 
 4. Router (for serving files via the built-in plug):
 
@@ -232,8 +236,9 @@ Article |> Repo.all() |> Repo.preload(images: :original)
 - **Don't polymorphic-associate originals manually.** The `owner_table` +
   `owner_field` columns are for orphan cleanup only, not for querying
   "all originals for record X".
-- **Don't configure the service per-request.** It's a global module pick;
-  swap via `config :attached, :storage_backend, ...`.
+- **Don't configure the service per-request.** It's a global pick; swap via
+  `config :attached, :default_storage_backend, ...` (a name from the
+  `:storage_backends` registry).
 - **Don't expect `attached` to work on update if you used a non-UUID
   primary key.** Blob FKs are `:binary_id` — your owner tables must use
   UUIDs too.
@@ -252,8 +257,9 @@ In tests, use the disk service pointed at a tmp dir:
 ```elixir
 # config/test.exs
 config :attached,
-  storage_backend: Attached.StorageBackends.Disk,
-  disk: [root: Path.join([System.tmp_dir!(), "attached_test"])],
+  storage_backends: [
+    local: {Attached.StorageBackends.Disk, root: Path.join([System.tmp_dir!(), "attached_test"])}
+  ],
   repo: MyApp.Repo
 ```
 
@@ -264,6 +270,6 @@ service doesn't clear itself between tests.
 
 | Key | Purpose |
 |---|---|
-| `config :attached, :storage_backend, Module` | Storage backend (built-in: `Attached.StorageBackends.Disk`) |
-| `config :attached, :disk, [root: path]` | Disk-service root |
+| `config :attached, :storage_backends, [name: {Module, config}]` | Storage backend registry (built-in modules: `Attached.StorageBackends.Disk`, `Attached.StorageBackends.S3`) |
+| `config :attached, :default_storage_backend, :name` | Default backend instance (optional with a single registry entry) |
 | `config :attached, :repo, MyApp.Repo` | Ecto repo (module, `{mod, fun}`, or 0-arity function for dynamic repos) |

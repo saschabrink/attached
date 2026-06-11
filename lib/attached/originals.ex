@@ -103,7 +103,7 @@ defmodule Attached.Originals do
         key: key,
         byte_size: byte_size,
         checksum: compute_checksum(path),
-        storage_backend: inspect(Attached.StorageBackends.current())
+        storage_backend: to_string(Attached.StorageBackends.default_name())
       )
       |> Map.new()
       |> Original.changeset()

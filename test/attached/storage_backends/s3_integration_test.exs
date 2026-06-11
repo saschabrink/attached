@@ -11,9 +11,9 @@ defmodule Attached.StorageBackends.S3IntegrationTest do
   # disqualifies it as an oracle for our SigV4 implementation), and rustfs
   # isn't packaged in nixpkgs yet.
   #
-  # async: false because it swaps the global :s3 config for the duration of
-  # the module.
-  use ExUnit.Case, async: false
+  # The backend instance config is built in setup_all and passed through the
+  # test context — no global state, so the module can run async.
+  use ExUnit.Case, async: true
 
   @moduletag :integration
   @moduletag timeout: 120_000
@@ -96,9 +96,7 @@ defmodule Attached.StorageBackends.S3IntegrationTest do
 
     garage!(garage, config_path, ["bucket", "allow", "--read", "--write", @bucket, "--key", "attached-it"])
 
-    previous = Application.get_env(:attached, :s3)
-
-    Application.put_env(:attached, :s3,
+    config = [
       bucket: @bucket,
       region: "garage",
       access_key_id: access_key_id,
@@ -106,37 +104,35 @@ defmodule Attached.StorageBackends.S3IntegrationTest do
       endpoint: endpoint,
       response_content_type: false,
       req_options: [retry: false]
-    )
+    ]
 
-    on_exit(fn -> Application.put_env(:attached, :s3, previous) end)
-
-    :ok
+    {:ok, config: config}
   end
 
-  test "full object lifecycle: upload, exists?, download, ranged download, delete" do
+  test "full object lifecycle: upload, exists?, download, ranged download, delete", %{config: config} do
     key = "it/lifecycle"
     tmp = tmp_file!("integration bytes")
 
-    assert :ok = S3.upload(key, tmp)
-    assert S3.exists?(key)
+    assert :ok = S3.upload(config, key, tmp)
+    assert S3.exists?(config, key)
 
-    assert {:ok, "integration bytes"} = S3.download(key)
-    assert {:ok, "gration"} = S3.download_chunk(key, 4..10)
+    assert {:ok, "integration bytes"} = S3.download(config, key)
+    assert {:ok, "gration"} = S3.download_chunk(config, key, 4..10)
 
-    assert :ok = S3.delete(key)
-    refute S3.exists?(key)
-    assert {:error, :not_found} = S3.download(key)
+    assert :ok = S3.delete(config, key)
+    refute S3.exists?(config, key)
+    assert {:error, :not_found} = S3.download(config, key)
 
     # Deleting a missing key stays :ok.
-    assert :ok = S3.delete(key)
+    assert :ok = S3.delete(config, key)
   end
 
-  test "presigned URLs are accepted by a real S3 implementation" do
+  test "presigned URLs are accepted by a real S3 implementation", %{config: config} do
     key = "it/presigned"
     tmp = tmp_file!("presigned body")
-    assert :ok = S3.upload(key, tmp)
+    assert :ok = S3.upload(config, key, tmp)
 
-    url = S3.url(key)
+    url = S3.url(config, key)
 
     assert {:ok, %{status: 200, body: "presigned body"}} =
              Req.get(url, retry: false, decode_body: false)
@@ -146,14 +142,15 @@ defmodule Attached.StorageBackends.S3IntegrationTest do
     assert {:ok, %{status: 403}} = Req.get(tampered, retry: false, decode_body: false)
   end
 
-  test "extra query params are covered by the presigned signature" do
+  test "extra query params are covered by the presigned signature", %{config: config} do
     key = "it/presigned-content-type"
     tmp = tmp_file!("plain text")
-    assert :ok = S3.upload(key, tmp)
+    assert :ok = S3.upload(config, key, tmp)
 
     url =
       Client.presigned_url(
-        Config.bucket_url() <> "/#{key}?response-content-type=text%2Fplain",
+        config,
+        Config.bucket_url(config) <> "/#{key}?response-content-type=text%2Fplain",
         :get,
         300
       )
@@ -162,12 +159,12 @@ defmodule Attached.StorageBackends.S3IntegrationTest do
     assert response.headers["content-type"] == ["text/plain"]
   end
 
-  test "direct upload: presigned PUT with signed metadata headers" do
+  test "direct upload: presigned PUT with signed metadata headers", %{config: config} do
     body = "direct upload body"
     checksum = Base.encode64(:crypto.hash(:md5, body))
 
     assert {:ok, %{url: url, headers: headers}} =
-             S3.direct_upload_url("it/direct",
+             S3.direct_upload_url(config, "it/direct",
                content_type: "text/plain",
                checksum: checksum,
                byte_size: byte_size(body)
@@ -175,34 +172,34 @@ defmodule Attached.StorageBackends.S3IntegrationTest do
 
     assert {:ok, %{status: status}} = Req.put(url, headers: headers, body: body, retry: false)
     assert status in 200..299
-    assert {:ok, ^body} = S3.download("it/direct")
+    assert {:ok, ^body} = S3.download(config, "it/direct")
 
     # A body that doesn't match the signed Content-MD5 must be rejected.
     assert {:ok, %{status: tampered_status}} =
              Req.put(url, headers: headers, body: "tampered body!!!!!", retry: false)
 
     assert tampered_status in [400, 403]
-    assert {:ok, ^body} = S3.download("it/direct")
+    assert {:ok, ^body} = S3.download(config, "it/direct")
   end
 
-  test "compose concatenates objects" do
-    assert :ok = S3.upload("it/compose-a", tmp_file!("AAA"))
-    assert :ok = S3.upload("it/compose-b", tmp_file!("BBB"))
+  test "compose concatenates objects", %{config: config} do
+    assert :ok = S3.upload(config, "it/compose-a", tmp_file!("AAA"))
+    assert :ok = S3.upload(config, "it/compose-b", tmp_file!("BBB"))
 
-    assert :ok = S3.compose(["it/compose-a", "it/compose-b"], "it/composed")
-    assert {:ok, "AAABBB"} = S3.download("it/composed")
+    assert :ok = S3.compose(config, ["it/compose-a", "it/compose-b"], "it/composed")
+    assert {:ok, "AAABBB"} = S3.download(config, "it/composed")
   end
 
-  test "delete_prefixed removes exactly the keys under the prefix" do
-    assert :ok = S3.upload("_variants/it-parent-thumb-aaaa", tmp_file!("v1"))
-    assert :ok = S3.upload("_variants/it-parent-medium-bbbb", tmp_file!("v2"))
-    assert :ok = S3.upload("_variants/it-other-thumb-cccc", tmp_file!("keep"))
+  test "delete_prefixed removes exactly the keys under the prefix", %{config: config} do
+    assert :ok = S3.upload(config, "_variants/it-parent-thumb-aaaa", tmp_file!("v1"))
+    assert :ok = S3.upload(config, "_variants/it-parent-medium-bbbb", tmp_file!("v2"))
+    assert :ok = S3.upload(config, "_variants/it-other-thumb-cccc", tmp_file!("keep"))
 
-    assert :ok = S3.delete_prefixed("_variants/it-parent")
+    assert :ok = S3.delete_prefixed(config, "_variants/it-parent")
 
-    refute S3.exists?("_variants/it-parent-thumb-aaaa")
-    refute S3.exists?("_variants/it-parent-medium-bbbb")
-    assert S3.exists?("_variants/it-other-thumb-cccc")
+    refute S3.exists?(config, "_variants/it-parent-thumb-aaaa")
+    refute S3.exists?(config, "_variants/it-parent-medium-bbbb")
+    assert S3.exists?(config, "_variants/it-other-thumb-cccc")
   end
 
   # ===== Helpers =====

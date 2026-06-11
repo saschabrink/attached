@@ -1,20 +1,22 @@
 defmodule Attached.StorageBackends.S3.Config do
   @moduledoc false
 
-  def fetch!(key) do
-    get(key) ||
-      raise ArgumentError, "missing S3 configuration — set config :attached, s3: [#{key}: ...]"
+  # Helpers over an S3 backend instance's config keyword — its entry in
+  # `config :attached, :storage_backends`. No global lookups; the keyword is
+  # threaded in from the facade.
+
+  def fetch!(config, key) do
+    Keyword.get(config, key) ||
+      raise ArgumentError,
+            "missing S3 configuration — add `#{key}: ...` to the backend's entry " <>
+              "in `config :attached, :storage_backends`"
   end
 
-  def get(key, default \\ nil) do
-    :attached
-    |> Application.get_env(:s3, [])
-    |> Keyword.get(key, default)
-  end
+  def get(config, key, default \\ nil), do: Keyword.get(config, key, default)
 
-  def region, do: get(:region, "us-east-1")
+  def region(config), do: get(config, :region, "us-east-1")
 
-  def req_options, do: get(:req_options, [])
+  def req_options(config), do: get(config, :req_options, [])
 
   @doc """
   Base URL of the bucket, without a trailing slash.
@@ -22,10 +24,10 @@ defmodule Attached.StorageBackends.S3.Config do
   Virtual-host style for AWS, path-style when a custom `:endpoint` is
   configured (MinIO, R2, and most other S3-compatibles expect path-style).
   """
-  def bucket_url do
-    case get(:endpoint) do
-      nil -> "https://#{fetch!(:bucket)}.s3.#{region()}.amazonaws.com"
-      endpoint -> String.trim_trailing(endpoint, "/") <> "/" <> fetch!(:bucket)
+  def bucket_url(config) do
+    case get(config, :endpoint) do
+      nil -> "https://#{fetch!(config, :bucket)}.s3.#{region(config)}.amazonaws.com"
+      endpoint -> String.trim_trailing(endpoint, "/") <> "/" <> fetch!(config, :bucket)
     end
   end
 end

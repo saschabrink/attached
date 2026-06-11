@@ -8,7 +8,7 @@ defmodule Attached.VariantsTest do
   defp upload_dummy(key) do
     tmp = Path.join(System.tmp_dir!(), "variants_test_#{key}")
     File.write!(tmp, "dummy")
-    :ok = Attached.StorageBackends.Disk.upload(key, tmp)
+    :ok = Attached.StorageBackends.upload(key, tmp)
     File.rm(tmp)
     :ok
   end

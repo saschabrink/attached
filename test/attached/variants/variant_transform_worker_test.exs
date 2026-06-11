@@ -18,7 +18,8 @@ defmodule Attached.Variants.VariantTransformWorkerTest do
   end
 
   defp storage_root do
-    :attached |> Application.get_env(:disk, []) |> Keyword.get(:root)
+    {_disk, config} = Attached.StorageBackends.resolve!(:local)
+    Keyword.fetch!(config, :root)
   end
 
   # Mirror the worker's transforms-from-schema resolution to compute the
@@ -37,7 +38,7 @@ defmodule Attached.Variants.VariantTransformWorkerTest do
     test "generates and stores a variant for an image original" do
       fixture = Path.expand("../../support/fixtures/header.png", __DIR__)
       key = "transform_img_#{System.unique_integer([:positive])}"
-      :ok = Attached.StorageBackends.Disk.upload(key, fixture)
+      :ok = Attached.StorageBackends.upload(key, fixture)
 
       original =
         insert_original(%{
@@ -60,7 +61,7 @@ defmodule Attached.Variants.VariantTransformWorkerTest do
                })
 
       variant = Repo.get_by!(Variant, original_id: original.id, transform_digest: expected_digest(:thumb))
-      assert Attached.StorageBackends.Disk.exists?(Variants.path_for(original, variant))
+      assert Attached.StorageBackends.exists?(Variants.path_for(original, variant))
     end
 
     @tag skip: not (@ffmpeg_available and @image_tool_available)
@@ -69,7 +70,7 @@ defmodule Attached.Variants.VariantTransformWorkerTest do
       on_exit(fn -> File.rm(video_path) end)
 
       key = "transform_vid_#{System.unique_integer([:positive])}"
-      :ok = Attached.StorageBackends.Disk.upload(key, video_path)
+      :ok = Attached.StorageBackends.upload(key, video_path)
 
       original =
         insert_original(%{
@@ -92,7 +93,7 @@ defmodule Attached.Variants.VariantTransformWorkerTest do
                })
 
       variant = Repo.get_by!(Variant, original_id: original.id, transform_digest: expected_digest(:thumb))
-      assert Attached.StorageBackends.Disk.exists?(Variants.path_for(original, variant))
+      assert Attached.StorageBackends.exists?(Variants.path_for(original, variant))
     end
 
     test "is idempotent when variant already exists" do

@@ -14,7 +14,7 @@ defmodule Attached.Originals.ExtractMetadataWorkerTest do
     @tag skip: not @analysis_available
     test "stores image metadata in original.metadata" do
       key = "extract_img_#{System.unique_integer([:positive])}"
-      :ok = Attached.StorageBackends.Disk.upload(key, @fixture_png)
+      :ok = Attached.StorageBackends.upload(key, @fixture_png)
 
       original =
         insert_original(%{
@@ -39,7 +39,7 @@ defmodule Attached.Originals.ExtractMetadataWorkerTest do
       key = "extract_noop_#{System.unique_integer([:positive])}"
       tmp = Path.join(System.tmp_dir!(), "extract_noop.bin")
       File.write!(tmp, "no magic bytes match")
-      :ok = Attached.StorageBackends.Disk.upload(key, tmp)
+      :ok = Attached.StorageBackends.upload(key, tmp)
       File.rm(tmp)
 
       original =

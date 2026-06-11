@@ -72,9 +72,12 @@ defmodule Attached.Originals.Stats do
   @doc """
   Original counts and size aggregates grouped by storage backend.
 
+  The `storage_backend` column records the backend's instance name from the
+  `config :attached, :storage_backends` registry.
+
       [
         %{
-          storage_backend: "Attached.StorageBackends.S3",
+          storage_backend: "s3_main",
           record_count: 11_203,
           total_bytes: 9_700_000_000,
           avg_bytes: 865_848,

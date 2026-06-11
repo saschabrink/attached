@@ -3,12 +3,12 @@ import Config
 if config_env() == :test do
   config :logger, level: :warning
 
+  # Single registry entry — also exercises the "only entry becomes the
+  # default" resolution, no :default_storage_backend needed.
   config :attached,
     repo: Attached.TestRepo,
-    storage_backend: Attached.StorageBackends.Disk,
-    disk: [
-      root: Path.join([System.tmp_dir!(), "attached_test_storage"]),
-      base_url: "/attachments"
+    storage_backends: [
+      local: {Attached.StorageBackends.Disk, root: Path.join([System.tmp_dir!(), "attached_test_storage"]), base_url: "/attachments"}
     ]
 
   config :attached, Attached.TestRepo,
@@ -16,17 +16,6 @@ if config_env() == :test do
     pool: Ecto.Adapters.SQL.Sandbox
 
   config :attached, ecto_repos: [Attached.TestRepo]
-
-  # S3 backend tests run against a Req.Test plug stub — no real bucket.
-  config :attached,
-    s3: [
-      bucket: "test-bucket",
-      region: "eu-central-1",
-      access_key_id: "AKIATESTKEY",
-      secret_access_key: "test-secret",
-      response_content_type: false,
-      req_options: [plug: {Req.Test, Attached.StorageBackends.S3}, retry: false]
-    ]
 
   config :attached, Oban,
     repo: Attached.TestRepo,

@@ -9,12 +9,12 @@ Ecto.Migrator.up(Attached.TestRepo, 0, Attached.TestMigrations, log: false)
 # Start Oban in manual testing mode (jobs enqueued but not executed)
 {:ok, _} = Oban.start_link(Application.fetch_env!(:attached, Oban))
 
-configured_root =
+{_disk, disk_config} =
   :attached
-  |> Application.get_env(:disk, [])
-  |> Keyword.get(:root)
+  |> Application.get_env(:storage_backends)
+  |> Keyword.fetch!(:local)
 
-Attached.Test.setup_storage!(root: configured_root)
+Attached.Test.setup_storage!(root: disk_config[:root])
 
 # S3 integration tests boot a local Garage server. They run as part of the
 # normal suite whenever the binary is available (the dev shell provides it)
