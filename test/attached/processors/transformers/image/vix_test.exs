@@ -34,6 +34,25 @@ defmodule Attached.Processors.Transformers.Image.VixTest do
     assert File.stat!(low).size < File.stat!(high).size
   end
 
+  describe "resize_and_pad" do
+    @tag skip: not @available
+    test "pads to the exact target dimensions with a transparent background" do
+      base = solid_png(80.0, 200, 150)
+      out = tmp_png()
+
+      :ok = Transformer.transform(base, [resize_and_pad: {100, 100}], out)
+
+      {:ok, img} = Image.new_from_file(out)
+      assert Image.width(img) == 100
+      assert Image.height(img) == 100
+
+      # 200×150 fits to 100×75, centered: ~12px padding bands top and bottom.
+      # The alpha band is 0 in the padding and 255 inside the image.
+      assert List.last(Operation.getpoint!(img, 50, 2)) == 0.0
+      assert List.last(Operation.getpoint!(img, 50, 50)) == 255.0
+    end
+  end
+
   describe "watermark" do
     @base_value 80.0
     @logo_value 240.0

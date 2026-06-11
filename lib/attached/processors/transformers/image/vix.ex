@@ -53,8 +53,16 @@ defmodule Attached.Processors.Transformers.Image.Vix do
       {:resize_to_fit, {w, h}}, img ->
         Vix.Vips.Operation.thumbnail_image!(img, w, height: h, size: :VIPS_SIZE_BOTH)
 
+      # Fit within the bounds, then center on a w×h canvas. Transparent
+      # padding, matching the ImageMagick backend's `-background transparent`.
       {:resize_and_pad, {w, h}}, img ->
-        Vix.Vips.Operation.thumbnail_image!(img, w, height: h, size: :VIPS_SIZE_BOTH)
+        img
+        |> Vix.Vips.Operation.thumbnail_image!(w, height: h, size: :VIPS_SIZE_BOTH)
+        |> to_srgb_alpha()
+        |> Vix.Vips.Operation.gravity!(:VIPS_COMPASS_DIRECTION_CENTRE, w, h,
+          extend: :VIPS_EXTEND_BACKGROUND,
+          background: [0.0, 0.0, 0.0, 0.0]
+        )
 
       {:crop, {x, y, w, h}}, img ->
         Vix.Vips.Operation.extract_area!(img, x, y, w, h)

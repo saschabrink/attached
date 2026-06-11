@@ -100,8 +100,9 @@ defmodule Attached.Variants do
   Returns the cached `%Variant{}` for `original` with `transform_digest`,
   generating and storing it if it doesn't exist yet.
 
-  Idempotent — safe to call concurrently; a unique index on
-  `(original_id, transform_digest)` prevents duplicate rows.
+  Idempotent — safe to call concurrently. Two simultaneous callers may both
+  run the transform, but the unique index on `(original_id, transform_digest)`
+  guarantees a single row: the loser returns the winner's cached variant.
   """
   def process(%Original{} = original, transform_digest, transforms) do
     Keyword.get(transforms, :variant_name) ||
@@ -323,7 +324,7 @@ defmodule Attached.Variants do
             checksum: compute_checksum(tmp_output)
           }
           |> Variant.changeset()
-          |> Attached.Repo.current().insert!()
+          |> insert_or_get_existing(original, transform_digest)
 
         {:error, reason} ->
           raise "Attached.Variants: transform failed — #{inspect(reason)}"
@@ -332,6 +333,24 @@ defmodule Attached.Variants do
       File.rm(tmp_input)
       File.rm(tmp_preview)
       File.rm(tmp_output)
+    end
+  end
+
+  # Two callers can race past the get_for/2 check in process/3 and both
+  # generate. The unique index on (original_id, transform_digest) fails the
+  # second insert — return the winner's row instead of raising. Both uploads
+  # target the same storage path, so the stored file is identical either way.
+  defp insert_or_get_existing(changeset, original, transform_digest) do
+    case Attached.Repo.current().insert(changeset) do
+      {:ok, variant} ->
+        variant
+
+      {:error, %Ecto.Changeset{errors: errors} = changeset} ->
+        unique_violation? =
+          Enum.any?(errors, fn {_field, {_msg, meta}} -> meta[:constraint] == :unique end)
+
+        (unique_violation? && get_for(original, transform_digest)) ||
+          raise Ecto.InvalidChangesetError, action: :insert, changeset: changeset
     end
   end
 
@@ -375,8 +394,7 @@ defmodule Attached.Variants do
   # MD5 + base64, matching `Attached.Originals.compute_checksum/1` and the format
   # S3/GCS expect in `Content-MD5`. Used here to record the variant's checksum
   # in `attached_variants.checksum` for integrity checks against the stored
-  # file (bit-rot, truncated transform output, etc). See WHY_DIDNT_YOU.md for
-  # why MD5 is the right choice despite being cryptographically broken.
+  # file (bit-rot, truncated transform output, etc).
   defp compute_checksum(path) do
     File.stream!(path, 2_048)
     |> Enum.reduce(:crypto.hash_init(:md5), &:crypto.hash_update(&2, &1))

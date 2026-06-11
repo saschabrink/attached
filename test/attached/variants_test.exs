@@ -1,3 +1,24 @@
+defmodule Attached.VariantsTest.RivalTransform do
+  # Simulates losing the process/3 race deterministically: by the time this
+  # "transform" finishes, a concurrent caller has already inserted the variant
+  # row for the same (original_id, transform_digest).
+  def transform(_input_path, transforms, output_path) do
+    %{
+      original_id: Keyword.fetch!(transforms, :original_id),
+      name: "race",
+      transform_digest: Attached.Variants.transform_digest(transforms),
+      content_type: "image/png",
+      byte_size: 1,
+      checksum: "rival"
+    }
+    |> Attached.Variants.Variant.changeset()
+    |> Attached.TestRepo.insert!()
+
+    File.write!(output_path, "x")
+    :ok
+  end
+end
+
 defmodule Attached.VariantsTest do
   use Attached.DataCase, async: false
 
@@ -11,6 +32,38 @@ defmodule Attached.VariantsTest do
     :ok = Attached.StorageBackends.upload(key, tmp)
     File.rm(tmp)
     :ok
+  end
+
+  describe "process/3 concurrency" do
+    test "returns the existing row when a concurrent caller inserts first" do
+      key = "race_#{System.unique_integer([:positive])}"
+      :ok = upload_dummy(key)
+
+      original =
+        insert_original(%{
+          key: key,
+          filename: "pic.png",
+          content_type: "image/png",
+          byte_size: 5,
+          checksum: "abc",
+          storage_backend: "local",
+          owner_table: "users",
+          owner_field: "pic_attached_original_id"
+        })
+
+      transforms = [
+        fn: &Attached.VariantsTest.RivalTransform.transform/3,
+        mime_type: "image/png",
+        variant_name: :race,
+        original_id: original.id
+      ]
+
+      digest = Attached.Variants.transform_digest(transforms)
+      variant = Attached.Variants.process(original, digest, transforms)
+
+      assert variant.checksum == "rival"
+      assert Attached.Variants.count() == 1
+    end
   end
 
   describe "process/3 dispatch error branches" do
