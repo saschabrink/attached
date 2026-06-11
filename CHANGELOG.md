@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.2.0] - 2026-06-11
 
 ### Changed — BREAKING
 
@@ -72,6 +72,12 @@
 
 ### Fixed
 
+- `Attached.Variants.process/3` is now actually idempotent under concurrency:
+  two simultaneous callers for the same uncached variant no longer crash the
+  loser with `Ecto.ConstraintError` — it returns the winner's cached row.
+- `resize_and_pad` in the Vix transformer now pads to the exact target
+  dimensions with a transparent background (it behaved like `resize_to_fit`),
+  matching the ImageMagick backend.
 - `path_for/1` now has an explicit `nil` clause, resolving an Elixir 1.20 type
   warning when tests pass `nil` to verify the security guard.
 - Logger level set to `:warning` in test env, suppressing debug query output.
