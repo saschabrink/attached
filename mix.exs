@@ -54,7 +54,7 @@ defmodule Attached.MixProject do
   defp aliases do
     [
       precommit: [
-        "compile --warning-as-errors",
+        "compile --warnings-as-errors",
         "deps.unlock --unused",
         "format --check-formatted",
         "test"
