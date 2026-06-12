@@ -2,6 +2,8 @@
 
 [![Hex.pm](https://img.shields.io/hexpm/v/attached.svg)](https://hex.pm/packages/attached)
 [![Hexdocs](https://img.shields.io/badge/hex-docs-purple.svg)](https://hexdocs.pm/attached)
+[![CI](https://github.com/saschabrink/attached/actions/workflows/ci.yml/badge.svg)](https://github.com/saschabrink/attached/actions/workflows/ci.yml)
+[![License](https://img.shields.io/hexpm/l/attached.svg)](https://github.com/saschabrink/attached/blob/main/LICENSE)
 
 File attachments for Ecto schemas. Inspired by Rails' Active Storage, designed for Ecto.
 
