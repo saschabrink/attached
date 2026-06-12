@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: Elixir ${{ matrix.elixir }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - elixir: "1.20"
+            shell: default
+            lint: true
+          - elixir: "1.19"
+            shell: elixir119
+            lint: false
+    env:
+      MIX_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: cachix/install-nix-action@v31
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            deps
+            _build
+            .nix
+          key: mix-${{ matrix.elixir }}-${{ hashFiles('mix.lock', 'flake.lock') }}
+          restore-keys: |
+            mix-${{ matrix.elixir }}-
+
+      - name: Install dependencies
+        run: |
+          nix develop .#${{ matrix.shell }} --command bash -c '
+            mix local.hex --force
+            mix local.rebar --force
+            mix deps.get
+          '
+
+      - name: Compile (warnings as errors)
+        run: nix develop .#${{ matrix.shell }} --command mix compile --warnings-as-errors
+
+      - name: Check formatting
+        if: matrix.lint
+        run: nix develop .#${{ matrix.shell }} --command mix format --check-formatted
+
+      - name: Check unused dependencies
+        if: matrix.lint
+        run: nix develop .#${{ matrix.shell }} --command mix deps.unlock --check-unused
+
+      - name: Run tests
+        run: nix develop .#${{ matrix.shell }} --command mix test
